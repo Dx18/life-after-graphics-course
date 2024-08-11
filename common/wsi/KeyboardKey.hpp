@@ -10,5 +10,9 @@ enum class KeyboardKey
   ALL_KEYBOARD_KEYS
 #undef X
 
+<<<<<<< HEAD
     COUNT,
+=======
+  COUNT,
+>>>>>>> f0b31be (Initial migration from vk_graphics_basic)
 };

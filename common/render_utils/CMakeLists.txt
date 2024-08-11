@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 add_library(render_utils
   LineRenderer.cpp QuadRenderer.cpp)
 
@@ -17,3 +18,11 @@ target_add_shaders(render_utils
   shaders/plain_color.vert
   shaders/plain_color.frag
 )
+=======
+
+add_library(render_utils QuadRenderer.cpp)
+
+target_include_directories(render_utils PUBLIC ..)
+
+target_link_libraries(render_utils PUBLIC etna)
+>>>>>>> f0b31be (Initial migration from vk_graphics_basic)

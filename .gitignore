@@ -1,9 +1,15 @@
 bin
+<<<<<<< HEAD
 out
+=======
+>>>>>>> f0b31be (Initial migration from vk_graphics_basic)
 build
 external
 .vs
 .cache
 .vscode
 CMakeSettings.json
+<<<<<<< HEAD
 CMakeUserPresets.json
+=======
+>>>>>>> f0b31be (Initial migration from vk_graphics_basic)

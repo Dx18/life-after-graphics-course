@@ -9,5 +9,9 @@ enum class MouseButton
   ALL_MOUSE_BUTTONS
 #undef X
 
+<<<<<<< HEAD
     COUNT,
+=======
+  COUNT,
+>>>>>>> f0b31be (Initial migration from vk_graphics_basic)
 };

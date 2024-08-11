@@ -26,6 +26,7 @@ class OsWindow
   OsWindow() {}
 
 public:
+<<<<<<< HEAD
   struct CreateInfo
   {
     glm::uvec2 resolution;
@@ -43,6 +44,8 @@ public:
     OsWindowResizeCb resizeCb = {};
   };
 
+=======
+>>>>>>> f0b31be (Initial migration from vk_graphics_basic)
   OsWindow(const OsWindow&) = delete;
   OsWindow& operator=(const OsWindow&) = delete;
 
