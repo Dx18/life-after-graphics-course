@@ -249,17 +249,6 @@ etna::DescriptorSet WorldRenderer::createMaterialBindings(
     imageBindings.push_back(createImageBinding(textureIndices[i], *kFallbackImages[i]));
   }
 
-  for (const etna::ImageBinding& binding : imageBindings)
-  {
-    etna::set_state(
-      command_buffer,
-      binding.image.get(),
-      vk::PipelineStageFlagBits2::eFragmentShader,
-      vk::AccessFlagBits2::eShaderRead,
-      vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::ImageAspectFlagBits::eColor);
-  }
-
   std::vector<etna::Binding> bindings;
   for (std::size_t i = 0; i < textureIndices.size(); ++i)
   {
@@ -399,6 +388,7 @@ void WorldRenderer::doLightingPasses(
     vk::AccessFlagBits2::eShaderRead,
     vk::ImageLayout::eShaderReadOnlyOptimal,
     vk::ImageAspectFlagBits::eDepth);
+  etna::flush_barriers(cmd_buf);
 
   etna::RenderTargetState renderTargets(
     cmd_buf,

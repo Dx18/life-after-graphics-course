@@ -128,6 +128,22 @@ void SceneMaterials::load(const tinygltf::Model& model, etna::OneShotCmdMgr& one
       data.data()));
   }
 
+  ETNA_CHECK_VK_RESULT(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
+
+  for (const etna::Image& image : images)
+  {
+    etna::set_state(
+      commandBuffer,
+      image.get(),
+      vk::PipelineStageFlagBits2::eFragmentShader,
+      vk::AccessFlagBits2::eShaderRead,
+      vk::ImageLayout::eShaderReadOnlyOptimal,
+      vk::ImageAspectFlagBits::eColor);
+  }
+
+  ETNA_CHECK_VK_RESULT(commandBuffer.end());
+  one_shot_cmd_mgr.submitAndWait(commandBuffer);
+
   samplers.clear();
 
   for (const auto& sampler : model.samplers)
