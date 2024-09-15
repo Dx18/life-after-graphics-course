@@ -23,7 +23,7 @@ layout(push_constant) uniform params_t
 }
 params;
 
-layout(binding = 0, set = 0) buffer lightsData_t
+layout(binding = 0, set = 0) readonly buffer lightsData_t
 {
   LIGHT_PARAMS_TYPE lights[];
 }

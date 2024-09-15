@@ -133,8 +133,6 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     },
     commandBuffer,
     std::array<std::uint8_t, 4>{0x00, 0x00, 0x00, 0x00}.data());
-
-  oneShotCmdMgr->submitAndWait(commandBuffer);
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
