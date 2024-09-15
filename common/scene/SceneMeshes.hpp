@@ -9,9 +9,12 @@
 #include <etna/VertexInput.hpp>
 #include <etna/OneShotCmdMgr.hpp>
 
+<<<<<<< HEAD
 #include "SceneMaterials.hpp"
 
 
+=======
+>>>>>>> f2882a9 (Added task 1)
 // A single render element (relem) corresponds to a single draw call
 // of a certain pipeline with specific bindings (including material data)
 struct RenderElement
@@ -20,7 +23,11 @@ struct RenderElement
   std::uint32_t indexOffset;
   std::uint32_t indexCount;
 
+<<<<<<< HEAD
   std::optional<MaterialIndex> material;
+=======
+  std::optional<std::size_t> material;
+>>>>>>> f2882a9 (Added task 1)
 };
 
 // A mesh is a collection of relems. A scene may have the same mesh
@@ -64,8 +71,13 @@ private:
   {
     // First 3 floats are position, 4th float is a packed normal
     glm::vec4 positionAndNormal;
+<<<<<<< HEAD
     // First 2 floats are tex coords, 3rd and 4th are padding
     glm::vec4 texCoordAndPadding;
+=======
+    // First 2 floats are tex coords, 3rd is a packed tangent, 4th is padding
+    glm::vec4 texCoordAndTangentAndPadding;
+>>>>>>> f2882a9 (Added task 1)
   };
 
   static_assert(sizeof(Vertex) == sizeof(float) * 8);

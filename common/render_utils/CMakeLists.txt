@@ -1,4 +1,7 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> f2882a9 (Added task 1)
 add_library(render_utils
   LineRenderer.cpp QuadRenderer.cpp)
 

@@ -1,6 +1,9 @@
 #include "SceneMaterials.hpp"
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> f2882a9 (Added task 1)
 template <typename T, typename F>
   requires(std::is_invocable_r_v<std::uint8_t, F, T>)
 static std::vector<glm::u8vec4> transformPixelsImpl(
@@ -129,6 +132,7 @@ void SceneMaterials::load(const tinygltf::Model& model, etna::OneShotCmdMgr& one
       data.data()));
   }
 
+<<<<<<< HEAD
   ETNA_CHECK_VK_RESULT(commandBuffer.begin(vk::CommandBufferBeginInfo{}));
 
   for (const etna::Image& image : images)
@@ -145,6 +149,8 @@ void SceneMaterials::load(const tinygltf::Model& model, etna::OneShotCmdMgr& one
   ETNA_CHECK_VK_RESULT(commandBuffer.end());
   one_shot_cmd_mgr.submitAndWait(commandBuffer);
 
+=======
+>>>>>>> f2882a9 (Added task 1)
   samplers.clear();
 
   for (const auto& sampler : model.samplers)
@@ -161,8 +167,13 @@ void SceneMaterials::load(const tinygltf::Model& model, etna::OneShotCmdMgr& one
   for (const auto& texture : model.textures)
   {
     textures.push_back(Texture{
+<<<<<<< HEAD
       .image = static_cast<ImageIndex>(texture.source),
       .sampler = static_cast<SamplerIndex>(texture.sampler),
+=======
+      .image = static_cast<std::size_t>(texture.source),
+      .sampler = static_cast<std::size_t>(texture.sampler),
+>>>>>>> f2882a9 (Added task 1)
     });
   }
 
@@ -176,7 +187,11 @@ void SceneMaterials::load(const tinygltf::Model& model, etna::OneShotCmdMgr& one
 
     if (pbr.baseColorTexture.index != -1)
     {
+<<<<<<< HEAD
       material.baseColorTexture = static_cast<TextureIndex>(pbr.baseColorTexture.index);
+=======
+      material.baseColorTexture = pbr.baseColorTexture.index;
+>>>>>>> f2882a9 (Added task 1)
     }
     material.baseColor = glm::vec4(
       pbr.baseColorFactor[0],
@@ -186,35 +201,56 @@ void SceneMaterials::load(const tinygltf::Model& model, etna::OneShotCmdMgr& one
 
     if (pbr.metallicRoughnessTexture.index != -1)
     {
+<<<<<<< HEAD
       material.metallicRoughnessTexture =
         static_cast<TextureIndex>(pbr.metallicRoughnessTexture.index);
+=======
+      material.metallicRoughnessTexture = pbr.metallicRoughnessTexture.index;
+>>>>>>> f2882a9 (Added task 1)
     }
     material.metallicFactor = pbr.metallicFactor;
     material.roughnessFactor = pbr.roughnessFactor;
 
     if (gltfMaterial.normalTexture.index != -1)
     {
+<<<<<<< HEAD
       material.normalTexture = static_cast<TextureIndex>(gltfMaterial.normalTexture.index);
     }
     if (gltfMaterial.occlusionTexture.index != -1)
     {
       material.occlusionTexture = static_cast<TextureIndex>(gltfMaterial.occlusionTexture.index);
+=======
+      material.normalTexture = gltfMaterial.normalTexture.index;
+    }
+    if (gltfMaterial.occlusionTexture.index != -1)
+    {
+      material.occlusionTexture = gltfMaterial.occlusionTexture.index;
+>>>>>>> f2882a9 (Added task 1)
     }
 
     if (gltfMaterial.emissiveTexture.index != -1)
     {
+<<<<<<< HEAD
       material.emissiveTexture = static_cast<TextureIndex>(gltfMaterial.emissiveTexture.index);
+=======
+      material.emissiveTexture = gltfMaterial.emissiveTexture.index;
+>>>>>>> f2882a9 (Added task 1)
     }
     material.emissiveFactor = glm::vec4(
       gltfMaterial.emissiveFactor[0],
       gltfMaterial.emissiveFactor[1],
       gltfMaterial.emissiveFactor[2],
+<<<<<<< HEAD
       1.0);
+=======
+      gltfMaterial.emissiveFactor[3]);
+>>>>>>> f2882a9 (Added task 1)
 
     materials.push_back(material);
   }
 }
 
+<<<<<<< HEAD
 const etna::Image& SceneMaterials::getImage(ImageIndex image_index) const
 {
   ETNA_VERIFYF(
@@ -253,4 +289,44 @@ const Material& SceneMaterials::getMaterial(MaterialIndex material_index) const
     static_cast<std::size_t>(material_index),
     materials.size());
   return materials[static_cast<std::size_t>(material_index)];
+=======
+const etna::Image& SceneMaterials::getImage(std::size_t image_index) const
+{
+  ETNA_VERIFYF(
+    image_index < images.size(),
+    "The image index ({}) is greater than or equal to the number of images ({})",
+    image_index,
+    images.size());
+  return images[image_index];
+}
+
+const etna::Sampler& SceneMaterials::getSampler(std::size_t sampler_index) const
+{
+  ETNA_VERIFYF(
+    sampler_index < samplers.size(),
+    "The sampler index ({}) is greater than or equal to the number of samplers ({})",
+    sampler_index,
+    samplers.size());
+  return samplers[sampler_index];
+}
+
+const Texture& SceneMaterials::getTexture(std::size_t texture_index) const
+{
+  ETNA_VERIFYF(
+    texture_index < textures.size(),
+    "The texture index ({}) is greater than or equal to the number of textures ({})",
+    texture_index,
+    textures.size());
+  return textures[texture_index];
+}
+
+const Material& SceneMaterials::getMaterial(std::size_t material_index) const
+{
+  ETNA_VERIFYF(
+    material_index < materials.size(),
+    "The material index ({}) is greater than or equal to the number of materials ({})",
+    material_index,
+    materials.size());
+  return materials[material_index];
+>>>>>>> f2882a9 (Added task 1)
 }

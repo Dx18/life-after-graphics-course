@@ -127,6 +127,7 @@ std::vector<glm::mat4> SceneManager::processInstanceMatrices(const tinygltf::Mod
   }
 
   return instanceMatrices;
+<<<<<<< HEAD
 =======
 	if (!model.extensions.empty() || !model.extensionsRequired.empty() || !model.extensionsUsed.empty())
 		spdlog::warn("glTF: No glTF extensions are currently implemented!");
@@ -426,6 +427,8 @@ void SceneManager::uploadData(std::span<const Vertex> vertices, std::span<const 
 	transferHelper.uploadBuffer<Vertex>(*oneShotCommands, unifiedVbuf, 0, vertices);
 	transferHelper.uploadBuffer<std::uint32_t>(*oneShotCommands, unifiedIbuf, 0, indices);
 >>>>>>> f0b31be (Initial migration from vk_graphics_basic)
+=======
+>>>>>>> f2882a9 (Added task 1)
 }
 
 void SceneManager::selectScene(std::filesystem::path path)
@@ -437,11 +440,15 @@ void SceneManager::selectScene(std::filesystem::path path)
   auto model = std::move(*maybeModel);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> f2882a9 (Added task 1)
   instanceMatrices = processInstanceMatrices(model);
 
   meshes.load(model, transferHelper, *oneShotCommands);
   lights.load(instanceMatrices, model, transferHelper, *oneShotCommands);
   materials.load(model, *oneShotCommands);
+<<<<<<< HEAD
 =======
 	// By aggregating all SceneManager fields mutations here,
 	// we guarantee that we don't forget to clear something
@@ -476,4 +483,6 @@ etna::VertexByteStreamFormatDescription SceneManager::getVertexFormatDescription
 		}
 	};
 >>>>>>> f0b31be (Initial migration from vk_graphics_basic)
+=======
+>>>>>>> f2882a9 (Added task 1)
 }

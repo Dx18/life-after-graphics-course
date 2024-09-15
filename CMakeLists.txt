@@ -5,12 +5,15 @@ project(graphics_course CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+<<<<<<< HEAD
 =======
 cmake_minimum_required(VERSION 3.20)
 
 project(graphics_course CXX)
 
 >>>>>>> f0b31be (Initial migration from vk_graphics_basic)
+=======
+>>>>>>> f2882a9 (Added task 1)
 # Prevent the user from polluting the root directory with build files
 if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
   message(
@@ -44,6 +47,7 @@ include("cmake/thirdparty.cmake")
 include("cmake/shaders.cmake")
 
 add_subdirectory(common)
+<<<<<<< HEAD
 add_subdirectory(myrenderer)
 =======
 include("get_cpm.cmake")
@@ -78,3 +82,6 @@ add_subdirectory(../etna etna)
 add_subdirectory(common)
 add_subdirectory(samples)
 >>>>>>> f0b31be (Initial migration from vk_graphics_basic)
+=======
+add_subdirectory(tasks)
+>>>>>>> f2882a9 (Added task 1)

@@ -3,7 +3,10 @@
 
 #include "cpp_glsl_compat.h"
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> f2882a9 (Added task 1)
 struct DirectionalLight
 {
   shader_vec4 direction;

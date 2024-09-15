@@ -3,7 +3,10 @@
 
 #include "cpp_glsl_compat.h"
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> f2882a9 (Added task 1)
 struct InfinitePointLight
 {
   shader_vec4 position;

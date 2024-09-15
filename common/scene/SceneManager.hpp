@@ -21,8 +21,13 @@
 #include <etna/Buffer.hpp>
 #include <etna/BlockingTransferHelper.hpp>
 #include <etna/VertexInput.hpp>
+#include <etna/Sampler.hpp>
 
+#include "SceneLights.hpp"
+#include "SceneMaterials.hpp"
+#include "SceneMeshes.hpp"
 
+<<<<<<< HEAD
 // A single render element (relem) corresponds to a single draw call
 // of a certain pipeline with specific bindings (including material data)
 struct RenderElement
@@ -43,6 +48,8 @@ struct Mesh
   std::uint32_t relemCount;
 };
 >>>>>>> f0b31be (Initial migration from vk_graphics_basic)
+=======
+>>>>>>> f2882a9 (Added task 1)
 
 class SceneManager
 {
@@ -52,6 +59,7 @@ public:
   void selectScene(std::filesystem::path path);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
   std::span<const glm::mat4x4> getInstanceMatrices() { return instanceMatrices; }
 
   const SceneMeshes& getMeshes() const { return meshes; }
@@ -60,9 +68,11 @@ public:
 =======
   // Every instance is a mesh drawn with a certain transform
   // NOTE: maybe you can pass some additional data through unused matrix entries?
+=======
+>>>>>>> f2882a9 (Added task 1)
   std::span<const glm::mat4x4> getInstanceMatrices() { return instanceMatrices; }
-  std::span<const std::uint32_t> getInstanceMeshes() { return instanceMeshes; }
 
+<<<<<<< HEAD
   // Every mesh is a collection of relems
   std::span<const Mesh> getMeshes() { return meshes; }
 
@@ -74,10 +84,16 @@ public:
 
   etna::VertexByteStreamFormatDescription getVertexFormatDescription();
 >>>>>>> f0b31be (Initial migration from vk_graphics_basic)
+=======
+  const SceneMeshes& getMeshes() const { return meshes; }
+  const SceneLights& getLights() const { return lights; }
+  const SceneMaterials& getMaterials() const { return materials; }
+>>>>>>> f2882a9 (Added task 1)
 
 private:
   std::optional<tinygltf::Model> loadModel(std::filesystem::path path);
 
+<<<<<<< HEAD
 <<<<<<< HEAD
   std::vector<glm::mat4> processInstanceMatrices(const tinygltf::Model& model) const;
 =======
@@ -109,12 +125,16 @@ private:
   ProcessedMeshes processMeshes(const tinygltf::Model& model) const;
   void uploadData(std::span<const Vertex> vertices, std::span<const std::uint32_t>);
 >>>>>>> f0b31be (Initial migration from vk_graphics_basic)
+=======
+  std::vector<glm::mat4> processInstanceMatrices(const tinygltf::Model& model) const;
+>>>>>>> f2882a9 (Added task 1)
 
 private:
   tinygltf::TinyGLTF loader;
   std::unique_ptr<etna::OneShotCmdMgr> oneShotCommands;
   etna::BlockingTransferHelper transferHelper;
 
+<<<<<<< HEAD
 <<<<<<< HEAD
   std::vector<glm::mat4> instanceMatrices;
 
@@ -130,4 +150,11 @@ private:
   etna::Buffer unifiedVbuf;
   etna::Buffer unifiedIbuf;
 >>>>>>> f0b31be (Initial migration from vk_graphics_basic)
+=======
+  std::vector<glm::mat4> instanceMatrices;
+
+  SceneMeshes meshes;
+  SceneLights lights;
+  SceneMaterials materials;
+>>>>>>> f2882a9 (Added task 1)
 };

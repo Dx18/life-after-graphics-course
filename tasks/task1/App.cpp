@@ -37,7 +37,11 @@ App::App()
   shadowCam.lookAt({-8, 10, 8}, {0, 0, 0}, {0, 1, 0});
   mainCam.lookAt({0, 10, 10}, {0, 0, 0}, {0, 1, 0});
 
+<<<<<<< HEAD:samples/shadowmap/App.cpp
   renderer->loadScene(GRAPHICS_COURSE_ROOT "/resources/scenes/low_poly_dark_town/scene.gltf");
+=======
+  renderer->loadScene(GRAPHICS_COURSE_RESOURCES_ROOT "/scenes/DamagedHelmet/DamagedHelmet.gltf");
+>>>>>>> f2882a9 (Added task 1):tasks/task1/App.cpp
 }
 
 void App::run()
