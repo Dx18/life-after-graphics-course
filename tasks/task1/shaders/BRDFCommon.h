@@ -55,7 +55,7 @@ vec3 brdfCommon(vec3 dirIn, vec3 dirOut, vec3 colorIn, SurfacePointInfo info)
 
   float d = distributionGgx(dirIn, dirOut, info.normal, info.roughness);
   float g = geometrySmith(dirIn, dirOut, info.normal, info.roughness);
-  vec3 f = fresnel(dirIn, dirOut, info.normal, info.baseColor, info.metallic);
+  vec3 f = fresnelSchlick(dirIn, dirOut, info.normal, info.baseColor, info.metallic);
 
   vec3 numerator = d * g * f;
   float denominator = 4.0 * max(0.0, dot(dirIn, info.normal)) * max(0.0, dot(dirOut, info.normal));
