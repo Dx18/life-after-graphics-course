@@ -207,7 +207,7 @@ void SceneMaterials::load(const tinygltf::Model& model, etna::OneShotCmdMgr& one
       gltfMaterial.emissiveFactor[0],
       gltfMaterial.emissiveFactor[1],
       gltfMaterial.emissiveFactor[2],
-      gltfMaterial.emissiveFactor[3]);
+      1.0);
 
     materials.push_back(material);
   }
