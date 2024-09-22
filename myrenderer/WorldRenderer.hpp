@@ -105,21 +105,6 @@ private:
 
   // Debug stuff
 
-  enum struct DebugQuadMode
-  {
-    kDisabled,
-    kBaseColor,
-    kNormal,
-    kEmissive,
-    kOcclusionMetallicRoughness,
-    kDepth,
-  };
-
-  std::unique_ptr<QuadRenderer> quadRenderer;
-  DebugQuadMode debugQuadMode{DebugQuadMode::kDisabled};
-
-  void initQuadRenderer(vk::Format swapchain_format);
-
   std::unique_ptr<LineRenderer> gridRenderer;
   bool drawDebugGrid = false;
 

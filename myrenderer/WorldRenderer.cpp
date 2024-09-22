@@ -130,8 +130,6 @@ void WorldRenderer::loadShaders()
 
 void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 {
-  initQuadRenderer(swapchain_format);
-
   initGridRenderer(swapchain_format);
 
   initGeometryPassPipeline();
@@ -527,73 +525,11 @@ void WorldRenderer::renderWorld(
       gBuffer.depth.get(),
       gBuffer.depth.getView({}));
   }
-
-  // Debug quad pass
-
-  if (debugQuadMode != DebugQuadMode::kDisabled)
-  {
-    const etna::Image* image = nullptr;
-    switch (debugQuadMode)
-    {
-    case DebugQuadMode::kBaseColor:
-      image = &gBuffer.channels[0];
-      break;
-    case DebugQuadMode::kNormal:
-      image = &gBuffer.channels[1];
-      break;
-    case DebugQuadMode::kEmissive:
-      image = &gBuffer.channels[2];
-      break;
-    // case DebugQuadMode::kNormal:
-    //   image = &gBuffer.normal;
-    //   break;
-    // case DebugQuadMode::kEmissive:
-    //   image = &gBuffer.emissive;
-    //   break;
-    // case DebugQuadMode::kOcclusionMetallicRoughness:
-    //   image = &gBuffer.occlusionMetallicRoughness;
-    //   break;
-    case DebugQuadMode::kDepth:
-      image = &gBuffer.depth;
-      break;
-    default:
-      break;
-    }
-
-    quadRenderer->render(cmd_buf, target_image, target_image_view, *image, defaultSampler);
-  }
 }
 
 void WorldRenderer::drawGui()
 {
   ImGui::Begin("Simple render settings");
-
-  static std::array<std::pair<DebugQuadMode, std::string>, 6> kAvailableQuadDebugModes = {{
-    {DebugQuadMode::kDisabled, "Disabled"},
-    {DebugQuadMode::kBaseColor, "Base color"},
-    {DebugQuadMode::kNormal, "Normal"},
-    {DebugQuadMode::kEmissive, "Emissive"},
-    {DebugQuadMode::kOcclusionMetallicRoughness, "Occlusion, metallic, roughness"},
-    {DebugQuadMode::kDepth, "Depth"},
-  }};
-
-  const char* label =
-    std::ranges::find(kAvailableQuadDebugModes, debugQuadMode, [](const auto& mode_name) {
-      return mode_name.first;
-    })->second.c_str();
-
-  if (ImGui::BeginCombo("Debug quad mode", label))
-  {
-    for (auto [mode, name] : kAvailableQuadDebugModes)
-    {
-      if (ImGui::Selectable(name.c_str()))
-      {
-        debugQuadMode = mode;
-      }
-    }
-
-    ImGui::EndCombo();
-  }
 
   ImGui::Checkbox("Draw grid", &drawDebugGrid);
 
@@ -733,14 +669,6 @@ void WorldRenderer::initResolvePassPipeline(vk::Format swapchain_format)
           .colorAttachmentFormats = {swapchain_format},
         },
     });
-}
-
-void WorldRenderer::initQuadRenderer(vk::Format swapchain_format)
-{
-  quadRenderer = std::make_unique<QuadRenderer>(QuadRenderer::CreateInfo{
-    .format = swapchain_format,
-    .rect = {{0, 0}, {512, 512}},
-  });
 }
 
 void WorldRenderer::initGridRenderer(vk::Format swapchain_format)
