@@ -2,6 +2,7 @@
 
 #include <etna/GlobalContext.hpp>
 
+
 static std::uint32_t encode_normal(glm::vec3 normal)
 {
   const std::int32_t x = static_cast<std::int32_t>(normal.x * 32767.0f);

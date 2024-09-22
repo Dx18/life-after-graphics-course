@@ -3,6 +3,7 @@
 
 #include "cpp_glsl_compat.h"
 
+
 struct FinitePointLight
 {
   shader_vec4 positionRange;

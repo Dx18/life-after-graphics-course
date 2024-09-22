@@ -3,6 +3,7 @@
 
 #include "cpp_glsl_compat.h"
 
+
 struct InfinitePointLight
 {
   shader_vec4 position;

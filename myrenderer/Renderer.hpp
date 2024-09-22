@@ -1,9 +1,11 @@
 #pragma once
 
+#include <function2/function2.hpp>
+
+#include <glm/glm.hpp>
+
 #include <etna/GlobalContext.hpp>
 #include <etna/PerFrameCmdMgr.hpp>
-#include <glm/glm.hpp>
-#include <function2/function2.hpp>
 
 #include "wsi/Keyboard.hpp"
 

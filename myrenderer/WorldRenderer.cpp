@@ -1,43 +1,14 @@
 #include "WorldRenderer.hpp"
 
+#include <glm/ext.hpp>
+
+#include <imgui.h>
+
 #include <etna/GlobalContext.hpp>
 #include <etna/PipelineManager.hpp>
 #include <etna/RenderTargetStates.hpp>
 #include <etna/Profiling.hpp>
-#include <glm/ext.hpp>
-#include <imgui.h>
 
-
-template <typename L>
-struct LightPassInfo;
-
-template <>
-struct LightPassInfo<FinitePointLight>
-{
-  static constexpr const char* SHADER_NAME = "finite_point_light";
-  static constexpr std::size_t VERTICES_PER_INSTANCE = 36;
-};
-
-template <>
-struct LightPassInfo<InfinitePointLight>
-{
-  static constexpr const char* SHADER_NAME = "infinite_point_light";
-  static constexpr std::size_t VERTICES_PER_INSTANCE = 6;
-};
-
-template <>
-struct LightPassInfo<DirectionalLight>
-{
-  static constexpr const char* SHADER_NAME = "directional_light";
-  static constexpr std::size_t VERTICES_PER_INSTANCE = 6;
-};
-
-template <>
-struct LightPassInfo<AmbientLight>
-{
-  static constexpr const char* SHADER_NAME = "ambient_light";
-  static constexpr std::size_t VERTICES_PER_INSTANCE = 6;
-};
 
 WorldRenderer::WorldRenderer()
   : sceneMgr{std::make_unique<SceneManager>()}
@@ -50,30 +21,26 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
 
   auto& ctx = etna::get_context();
 
-  gBuffer.baseColor = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-    .name = "base_color",
-    .format = vk::Format::eR32G32B32A32Sfloat,
-    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
-  });
-  gBuffer.normal = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-    .name = "normal",
-    .format = vk::Format::eR32G32B32A32Sfloat,
-    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
-  });
-  gBuffer.emissive = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-    .name = "emissive",
-    .format = vk::Format::eR32G32B32A32Sfloat,
-    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
-  });
-  gBuffer.occlusionMetallicRoughness = ctx.createImage(etna::Image::CreateInfo{
-    .extent = vk::Extent3D{resolution.x, resolution.y, 1},
-    .name = "occlusion_metallic_roughness",
-    .format = vk::Format::eR32G32B32A32Sfloat,
-    .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
-  });
+  gBuffer.channels = {{
+    ctx.createImage(etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "channel0",
+      .format = vk::Format::eR8G8B8A8Unorm,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+    }),
+    ctx.createImage(etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "channel1",
+      .format = vk::Format::eA2R10G10B10UnormPack32,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+    }),
+    ctx.createImage(etna::Image::CreateInfo{
+      .extent = vk::Extent3D{resolution.x, resolution.y, 1},
+      .name = "channel2",
+      .format = vk::Format::eR8G8B8A8Unorm,
+      .imageUsage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+    }),
+  }};
   gBuffer.depth = ctx.createImage(etna::Image::CreateInfo{
     .extent = vk::Extent3D{resolution.x, resolution.y, 1},
     .name = "depth",
@@ -97,7 +64,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     },
     commandBuffer,
     std::array<std::uint8_t, 4>{0xFF, 0xFF, 0xFF, 0xFF}.data());
-  defaultMetallicRoughnessImage = etna::create_image_from_bytes(
+  defaultMetalnessRoughnessImage = etna::create_image_from_bytes(
     etna::Image::CreateInfo{
       .extent = vk::Extent3D{1, 1, 1},
       .name = "default_metallic_roughness",
@@ -124,7 +91,7 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     },
     commandBuffer,
     std::array<std::uint8_t, 4>{0xFF, 0xFF, 0xFF, 0xFF}.data());
-  defaultEmissiveImage = etna::create_image_from_bytes(
+  defaultEmissionImage = etna::create_image_from_bytes(
     etna::Image::CreateInfo{
       .extent = vk::Extent3D{1, 1, 1},
       .name = "default_emissive",
@@ -143,26 +110,21 @@ void WorldRenderer::loadScene(std::filesystem::path path)
 void WorldRenderer::loadShaders()
 {
   etna::create_program(
+    "geometry_pass",
+    {
+      MYRENDERER_SHADERS_ROOT "g_buffer_pass.vert.spv",
+    });
+  etna::create_program(
     "g_buffer_pass",
     {
-      TASK1_SHADERS_ROOT "g_buffer_pass.vert.spv",
-      TASK1_SHADERS_ROOT "g_buffer_pass.frag.spv",
+      MYRENDERER_SHADERS_ROOT "g_buffer_pass.vert.spv",
+      MYRENDERER_SHADERS_ROOT "g_buffer_pass.frag.spv",
     });
-
-  for_each_known_light_type([]<std::size_t, typename L>() {
-    etna::create_program(
-      fmt::format("{}_pass", LightPassInfo<L>::SHADER_NAME).c_str(),
-      {
-        fmt::format("{}{}_pass.vert.spv", TASK1_SHADERS_ROOT, LightPassInfo<L>::SHADER_NAME),
-        fmt::format("{}{}_pass.frag.spv", TASK1_SHADERS_ROOT, LightPassInfo<L>::SHADER_NAME),
-      });
-  });
-
   etna::create_program(
-    "emissive_light_pass",
+    "resolve_pass",
     {
-      TASK1_SHADERS_ROOT "emissive_light_pass.vert.spv",
-      TASK1_SHADERS_ROOT "emissive_light_pass.frag.spv",
+      MYRENDERER_SHADERS_ROOT "resolve_pass.vert.spv",
+      MYRENDERER_SHADERS_ROOT "resolve_pass.frag.spv",
     });
 }
 
@@ -172,9 +134,9 @@ void WorldRenderer::setupPipelines(vk::Format swapchain_format)
 
   initGridRenderer(swapchain_format);
 
-  initGBufferPipeline();
-
-  initLightPassPipelines(swapchain_format);
+  initGeometryPassPipeline();
+  initGBufferPassPipeline();
+  initResolvePassPipeline(swapchain_format);
 }
 
 void WorldRenderer::debugInput(const Keyboard& kb)
@@ -191,8 +153,9 @@ void WorldRenderer::update(const FramePacket& packet)
 
   // calc camera matrix
   {
-    const float aspect = float(resolution.x) / float(resolution.y);
+    const float aspect = static_cast<float>(resolution.x) / static_cast<float>(resolution.y);
     viewProjection = packet.mainCam.projTm(aspect) * packet.mainCam.viewTm();
+    camera = packet.mainCam;
   }
 }
 
@@ -237,10 +200,10 @@ etna::DescriptorSet WorldRenderer::createMaterialBindings(
 
   std::array<const etna::Image*, 5> kFallbackImages = {
     &defaultBaseColorImage,
-    &defaultMetallicRoughnessImage,
+    &defaultMetalnessRoughnessImage,
     &defaultNormalImage,
     &defaultOcclusionImage,
-    &defaultEmissiveImage,
+    &defaultEmissionImage,
   };
 
   std::vector<etna::ImageBinding> imageBindings;
@@ -284,28 +247,21 @@ WorldRenderer::MaterialConstants WorldRenderer::getMaterialConstants(
   };
 }
 
-void WorldRenderer::doGBufferPass(vk::CommandBuffer command_buffer)
+void WorldRenderer::doGeometryPass(vk::CommandBuffer command_buffer)
 {
   etna::RenderTargetState renderTargets(
     command_buffer,
     {{0, 0}, {resolution.x, resolution.y}},
-    {
-      {.image = gBuffer.baseColor.get(), .view = gBuffer.baseColor.getView({})},
-      {.image = gBuffer.normal.get(), .view = gBuffer.normal.getView({})},
-      {.image = gBuffer.emissive.get(), .view = gBuffer.emissive.getView({})},
-      {.image = gBuffer.occlusionMetallicRoughness.get(),
-       .view = gBuffer.occlusionMetallicRoughness.getView({})},
-    },
+    {},
     {.image = gBuffer.depth.get(), .view = gBuffer.depth.getView({})});
 
   command_buffer.bindPipeline(
-    vk::PipelineBindPoint::eGraphics, gBufferPassPipeline.getVkPipeline());
+    vk::PipelineBindPoint::eGraphics, geometryPassPipeline.getVkPipeline());
 
-  struct Constants
+  struct TransformConstants
   {
     glm::mat4 viewProjection;
     glm::mat4 model;
-    MaterialConstants materialConstants;
   };
 
   const SceneMeshes& sceneMeshes = sceneMgr->getMeshes();
@@ -318,10 +274,9 @@ void WorldRenderer::doGBufferPass(vk::CommandBuffer command_buffer)
   command_buffer.bindVertexBuffers(0, {sceneMeshes.getVertexBuffer()}, {0});
   command_buffer.bindIndexBuffer(sceneMeshes.getIndexBuffer(), 0, vk::IndexType::eUint32);
 
-  Constants pushConstants = {
+  TransformConstants transformConstants = {
     .viewProjection = viewProjection,
     .model = glm::mat4(1.0),
-    .materialConstants = {},
   };
 
   auto instanceMatrices = sceneMgr->getInstanceMatrices();
@@ -333,7 +288,13 @@ void WorldRenderer::doGBufferPass(vk::CommandBuffer command_buffer)
 
   for (std::size_t instIdx = 0; instIdx < meshInstances.size(); ++instIdx)
   {
-    pushConstants.model = instanceMatrices[instIdx];
+    transformConstants.model = instanceMatrices[instIdx];
+
+    command_buffer.pushConstants<TransformConstants>(
+      geometryPassPipeline.getVkPipelineLayout(),
+      vk::ShaderStageFlagBits::eVertex,
+      0,
+      {transformConstants});
 
     const auto meshInstance = meshInstances[instIdx];
 
@@ -342,7 +303,84 @@ void WorldRenderer::doGBufferPass(vk::CommandBuffer command_buffer)
       const auto relemIdx = meshes[meshInstance.mesh].firstRelem + j;
       const auto& relem = renderElements[relemIdx];
 
-      pushConstants.materialConstants = getMaterialConstants(relem.material);
+      command_buffer.drawIndexed(relem.indexCount, 1, relem.indexOffset, relem.vertexOffset, 0);
+    }
+  }
+}
+
+void WorldRenderer::doGBufferPass(vk::CommandBuffer command_buffer)
+{
+  etna::RenderTargetState renderTargets(
+    command_buffer,
+    {{0, 0}, {resolution.x, resolution.y}},
+    {
+      {
+        .image = gBuffer.channels[0].get(),
+        .view = gBuffer.channels[0].getView({}),
+        .clearColorValue = std::array<float, 4>{0.0, 0.0, 0.0, 0.0},
+      },
+      {
+        .image = gBuffer.channels[1].get(),
+        .view = gBuffer.channels[1].getView({}),
+        .clearColorValue = std::array<float, 4>{0.5, 0.5, 0.5, 0.0},
+      },
+      {
+        .image = gBuffer.channels[2].get(),
+        .view = gBuffer.channels[2].getView({}),
+        .clearColorValue = std::array<float, 4>{0.2, 0.3, 0.8, 0.0},
+      },
+    },
+    {.image = gBuffer.depth.get(), .view = gBuffer.depth.getView({})});
+
+  command_buffer.bindPipeline(
+    vk::PipelineBindPoint::eGraphics, gBufferPassPipeline.getVkPipeline());
+
+  struct TransformConstants
+  {
+    glm::mat4 viewProjection;
+    glm::mat4 model;
+  };
+
+  const SceneMeshes& sceneMeshes = sceneMgr->getMeshes();
+
+  if (!sceneMeshes.getVertexBuffer())
+  {
+    return;
+  }
+
+  command_buffer.bindVertexBuffers(0, {sceneMeshes.getVertexBuffer()}, {0});
+  command_buffer.bindIndexBuffer(sceneMeshes.getIndexBuffer(), 0, vk::IndexType::eUint32);
+
+  TransformConstants transformConstants = {
+    .viewProjection = viewProjection,
+    .model = glm::mat4(1.0),
+  };
+
+  auto instanceMatrices = sceneMgr->getInstanceMatrices();
+
+  auto meshInstances = sceneMeshes.getInstanceMeshes();
+
+  auto meshes = sceneMeshes.getMeshes();
+  auto renderElements = sceneMeshes.getRenderElements();
+
+  for (std::size_t instIdx = 0; instIdx < meshInstances.size(); ++instIdx)
+  {
+    transformConstants.model = instanceMatrices[instIdx];
+
+    command_buffer.pushConstants<TransformConstants>(
+      gBufferPassPipeline.getVkPipelineLayout(),
+      vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+      0,
+      {transformConstants});
+
+    const auto meshInstance = meshInstances[instIdx];
+
+    for (std::size_t j = 0; j < meshes[meshInstance.mesh].relemCount; ++j)
+    {
+      const auto relemIdx = meshes[meshInstance.mesh].firstRelem + j;
+      const auto& relem = renderElements[relemIdx];
+
+      MaterialConstants materialConstants = getMaterialConstants(relem.material);
 
       auto set = createMaterialBindings(command_buffer, relem.material);
 
@@ -352,30 +390,26 @@ void WorldRenderer::doGBufferPass(vk::CommandBuffer command_buffer)
         0,
         {set.getVkSet()},
         {});
-      command_buffer.pushConstants<Constants>(
+
+      command_buffer.pushConstants<MaterialConstants>(
         gBufferPassPipeline.getVkPipelineLayout(),
         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-        0,
-        {pushConstants});
+        sizeof(transformConstants),
+        {materialConstants});
 
       command_buffer.drawIndexed(relem.indexCount, 1, relem.indexOffset, relem.vertexOffset, 0);
     }
   }
 }
 
-void WorldRenderer::doLightingPasses(
+void WorldRenderer::doResolvePass(
   vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view)
 {
-  for (const etna::Image* image : {
-         &gBuffer.baseColor,
-         &gBuffer.normal,
-         &gBuffer.emissive,
-         &gBuffer.occlusionMetallicRoughness,
-       })
+  for (const etna::Image& image : gBuffer.channels)
   {
     etna::set_state(
       cmd_buf,
-      image->get(),
+      image.get(),
       vk::PipelineStageFlagBits2::eFragmentShader,
       vk::AccessFlagBits2::eShaderRead,
       vk::ImageLayout::eShaderReadOnlyOptimal,
@@ -398,76 +432,57 @@ void WorldRenderer::doLightingPasses(
     },
     {});
 
-  sceneMgr->getLights().forEachKnownLightType([this, cmd_buf]<std::size_t I, typename L>(
-                                                const SceneLights::HomogenousLightBuffer& buffer) {
-    if (buffer.count == 0)
-    {
-      return;
-    }
-
-    auto lightPassInfo =
-      etna::get_shader_program(fmt::format("{}_pass", LightPassInfo<L>::SHADER_NAME).c_str());
-
-    auto set = etna::create_descriptor_set(
-      lightPassInfo.getDescriptorLayoutId(0),
-      cmd_buf,
-      {
-        etna::Binding{0, buffer.buffer.genBinding()},
-        etna::Binding{
-          1,
-          gBuffer.baseColor.genBinding(
-            defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-        etna::Binding{
-          2,
-          gBuffer.normal.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-        etna::Binding{
-          3,
-          gBuffer.emissive.genBinding(
-            defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-        etna::Binding{
-          4,
-          gBuffer.occlusionMetallicRoughness.genBinding(
-            defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-        etna::Binding{
-          5,
-          gBuffer.depth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
-      });
-
-    cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, lightPassPipelines[I].getVkPipeline());
-    cmd_buf.bindDescriptorSets(
-      vk::PipelineBindPoint::eGraphics,
-      lightPassPipelines[I].getVkPipelineLayout(),
-      0,
-      {set.getVkSet()},
-      {});
-
-    cmd_buf.pushConstants<glm::mat4>(
-      lightPassPipelines[I].getVkPipelineLayout(),
-      vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-      0,
-      {viewProjection});
-
-    cmd_buf.draw(LightPassInfo<L>::VERTICES_PER_INSTANCE, buffer.count, 0, 0);
-  });
-
-  auto lightPassInfo = etna::get_shader_program("emissive_light_pass");
+  auto resolvePassInfo = etna::get_shader_program("resolve_pass");
 
   auto set = etna::create_descriptor_set(
-    lightPassInfo.getDescriptorLayoutId(0),
+    resolvePassInfo.getDescriptorLayoutId(0),
     cmd_buf,
     {
+      etna::Binding{0, sceneMgr->getLights().getLightsDataBuffer().genBinding()},
       etna::Binding{
-        0,
-        gBuffer.emissive.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+        1,
+        gBuffer.channels[0].genBinding(
+          defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+      etna::Binding{
+        2,
+        gBuffer.channels[1].genBinding(
+          defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+      etna::Binding{
+        3,
+        gBuffer.channels[2].genBinding(
+          defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
+      etna::Binding{
+        4, gBuffer.depth.genBinding(defaultSampler.get(), vk::ImageLayout::eShaderReadOnlyOptimal)},
     });
 
-  cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, emissiveLightPassPipeline.getVkPipeline());
+  cmd_buf.bindPipeline(vk::PipelineBindPoint::eGraphics, resolvePassPipeline.getVkPipeline());
   cmd_buf.bindDescriptorSets(
     vk::PipelineBindPoint::eGraphics,
-    emissiveLightPassPipeline.getVkPipelineLayout(),
+    resolvePassPipeline.getVkPipelineLayout(),
     0,
     {set.getVkSet()},
     {});
+
+  struct CameraConstants
+  {
+    glm::vec4 cameraPositionAspect;
+    glm::vec4 cameraViewDirZNear;
+    glm::vec4 cameraViewUpDirZFar;
+  };
+
+  CameraConstants cameraConstants = {
+    .cameraPositionAspect = glm::vec4(
+      camera.position, static_cast<float>(resolution.x) / static_cast<float>(resolution.y)),
+    .cameraViewDirZNear = glm::vec4(camera.forward(), camera.zNear),
+    .cameraViewUpDirZFar =
+      glm::vec4(camera.up() * glm::tan(glm::radians(camera.fov) / 2.0f), camera.zFar),
+  };
+
+  cmd_buf.pushConstants<CameraConstants>(
+    resolvePassPipeline.getVkPipelineLayout(),
+    vk::ShaderStageFlagBits::eFragment,
+    0,
+    {cameraConstants});
 
   cmd_buf.draw(6, 1, 0, 0);
 }
@@ -480,6 +495,12 @@ void WorldRenderer::renderWorld(
   // G-Buffer pass
 
   {
+    ETNA_PROFILE_GPU(cmd_buf, geometryPass);
+
+    doGeometryPass(cmd_buf);
+  }
+
+  {
     ETNA_PROFILE_GPU(cmd_buf, gBufferPass);
 
     doGBufferPass(cmd_buf);
@@ -488,9 +509,9 @@ void WorldRenderer::renderWorld(
   // Lighting passes
 
   {
-    ETNA_PROFILE_GPU(cmd_buf, lightingPasses);
+    ETNA_PROFILE_GPU(cmd_buf, resolvePass);
 
-    doLightingPasses(cmd_buf, target_image, target_image_view);
+    doResolvePass(cmd_buf, target_image, target_image_view);
   }
 
   // Grid pass
@@ -515,17 +536,23 @@ void WorldRenderer::renderWorld(
     switch (debugQuadMode)
     {
     case DebugQuadMode::kBaseColor:
-      image = &gBuffer.baseColor;
+      image = &gBuffer.channels[0];
       break;
     case DebugQuadMode::kNormal:
-      image = &gBuffer.normal;
+      image = &gBuffer.channels[1];
       break;
     case DebugQuadMode::kEmissive:
-      image = &gBuffer.emissive;
+      image = &gBuffer.channels[2];
       break;
-    case DebugQuadMode::kOcclusionMetallicRoughness:
-      image = &gBuffer.occlusionMetallicRoughness;
-      break;
+    // case DebugQuadMode::kNormal:
+    //   image = &gBuffer.normal;
+    //   break;
+    // case DebugQuadMode::kEmissive:
+    //   image = &gBuffer.emissive;
+    //   break;
+    // case DebugQuadMode::kOcclusionMetallicRoughness:
+    //   image = &gBuffer.occlusionMetallicRoughness;
+    //   break;
     case DebugQuadMode::kDepth:
       image = &gBuffer.depth;
       break;
@@ -581,8 +608,42 @@ void WorldRenderer::drawGui()
   ImGui::End();
 }
 
+void WorldRenderer::initGeometryPassPipeline()
+{
+  etna::VertexShaderInputDescription sceneVertexInputDesc{
+    .bindings = {etna::VertexShaderInputDescription::Binding{
+      .byteStreamDescription = sceneMgr->getMeshes().getVertexFormatDescription(),
+    }},
+  };
 
-void WorldRenderer::initGBufferPipeline()
+  auto& pipelineManager = etna::get_context().getPipelineManager();
+
+  geometryPassPipeline = pipelineManager.createGraphicsPipeline(
+    "geometry_pass",
+    etna::GraphicsPipeline::CreateInfo{
+      .vertexShaderInput = sceneVertexInputDesc,
+      .rasterizationConfig =
+        vk::PipelineRasterizationStateCreateInfo{
+          .polygonMode = vk::PolygonMode::eFill,
+          .cullMode = vk::CullModeFlagBits::eBack,
+          .frontFace = vk::FrontFace::eCounterClockwise,
+          .lineWidth = 1.f,
+        },
+      .blendingConfig =
+        etna::GraphicsPipeline::CreateInfo::Blending{
+          .attachments = {},
+          .logicOpEnable = false,
+          .logicOp = vk::LogicOp::eCopy,
+        },
+      .fragmentShaderOutput =
+        {
+          .colorAttachmentFormats = {},
+          .depthAttachmentFormat = vk::Format::eD32Sfloat,
+        },
+    });
+}
+
+void WorldRenderer::initGBufferPassPipeline()
 {
   etna::VertexShaderInputDescription sceneVertexInputDesc{
     .bindings = {etna::VertexShaderInputDescription::Binding{
@@ -627,12 +688,6 @@ void WorldRenderer::initGBufferPipeline()
                       vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB |
                       vk::ColorComponentFlagBits::eA,
                   },
-                  vk::PipelineColorBlendAttachmentState{
-                    .blendEnable = vk::False,
-                    .colorWriteMask = vk::ColorComponentFlagBits::eR |
-                      vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB |
-                      vk::ColorComponentFlagBits::eA,
-                  },
                 },
               .logicOpEnable = false,
               .logicOp = vk::LogicOp::eCopy,
@@ -641,20 +696,22 @@ void WorldRenderer::initGBufferPipeline()
             {
               .colorAttachmentFormats =
                 {
-                  vk::Format::eR32G32B32A32Sfloat,
-                  vk::Format::eR32G32B32A32Sfloat,
-                  vk::Format::eR32G32B32A32Sfloat,
-                  vk::Format::eR32G32B32A32Sfloat,
+                  vk::Format::eR8G8B8A8Unorm,
+                  vk::Format::eA2R10G10B10UnormPack32,
+                  vk::Format::eR8G8B8A8Unorm,
                 },
               .depthAttachmentFormat = vk::Format::eD32Sfloat,
             },
         });
 }
 
-void WorldRenderer::initLightPassPipelines(vk::Format swapchain_format)
+void WorldRenderer::initResolvePassPipeline(vk::Format swapchain_format)
 {
-  etna::GraphicsPipeline::CreateInfo lightPassPipelineCreateInfo =
-    {
+  auto& pipelineManager = etna::get_context().getPipelineManager();
+
+  resolvePassPipeline = pipelineManager.createGraphicsPipeline(
+    "resolve_pass",
+    etna::GraphicsPipeline::CreateInfo{
       .vertexShaderInput =
         etna::VertexShaderInputDescription{
           .bindings = {etna::VertexShaderInputDescription::Binding{
@@ -667,41 +724,15 @@ void WorldRenderer::initLightPassPipelines(vk::Format swapchain_format)
           .frontFace = vk::FrontFace::eCounterClockwise,
           .lineWidth = 1.f,
         },
-      .blendingConfig =
-        etna::GraphicsPipeline::CreateInfo::Blending{
-          .attachments =
-            {
-              vk::PipelineColorBlendAttachmentState{
-                .blendEnable = vk::True,
-                .srcColorBlendFactor = vk::BlendFactor::eOne,
-                .dstColorBlendFactor = vk::BlendFactor::eOne,
-                .colorBlendOp = vk::BlendOp::eAdd,
-                .srcAlphaBlendFactor = vk::BlendFactor::eOne,
-                .dstAlphaBlendFactor = vk::BlendFactor::eOne,
-                .alphaBlendOp = vk::BlendOp::eAdd,
-                .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-                  vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA,
-              },
-            },
-          .logicOpEnable = false,
-          .logicOp = vk::LogicOp::eCopy,
+      .depthConfig =
+        {
+          .depthTestEnable = vk::False,
         },
       .fragmentShaderOutput =
         {
           .colorAttachmentFormats = {swapchain_format},
         },
-    };
-
-  auto& pipelineManager = etna::get_context().getPipelineManager();
-
-  for_each_known_light_type(
-    [this, &pipelineManager, &lightPassPipelineCreateInfo]<std::size_t I, typename L>() {
-      lightPassPipelines[I] = pipelineManager.createGraphicsPipeline(
-        fmt::format("{}_pass", LightPassInfo<L>::SHADER_NAME).c_str(), lightPassPipelineCreateInfo);
     });
-
-  emissiveLightPassPipeline =
-    pipelineManager.createGraphicsPipeline("emissive_light_pass", lightPassPipelineCreateInfo);
 }
 
 void WorldRenderer::initQuadRenderer(vk::Format swapchain_format)

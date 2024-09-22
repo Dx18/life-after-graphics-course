@@ -3,7 +3,9 @@
 #include <filesystem>
 
 #include <glm/glm.hpp>
+
 #include <tiny_gltf.h>
+
 #include <etna/Buffer.hpp>
 #include <etna/BlockingTransferHelper.hpp>
 #include <etna/VertexInput.hpp>

@@ -2,10 +2,13 @@
 
 #include <stack>
 
-#include <spdlog/spdlog.h>
 #include <fmt/std.h>
+
+#include <spdlog/spdlog.h>
+
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+
 #include <etna/GlobalContext.hpp>
 #include <etna/OneShotCmdMgr.hpp>
 

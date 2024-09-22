@@ -3,6 +3,7 @@
 
 #include "SurfacePointInfo.h"
 
+
 // Shamelessly stolen from https://learnopengl.com/PBR/Theory
 
 const float PI = 3.14159265359;
@@ -38,9 +39,9 @@ float geometrySmith(vec3 dirIn, vec3 dirOut, vec3 normal, float roughness)
   return ggx1 * ggx2;
 }
 
-vec3 fresnelSchlick(vec3 dirIn, vec3 dirOut, vec3 normal, vec3 baseColor, float metallic)
+vec3 fresnelSchlick(vec3 dirIn, vec3 dirOut, vec3 normal, vec3 albedo, float metalness)
 {
-  vec3 f0 = mix(vec3(0.04), baseColor, metallic);
+  vec3 f0 = mix(vec3(0.04), albedo, metalness);
 
   vec3 h = normalize(dirIn + dirOut);
 
@@ -49,22 +50,31 @@ vec3 fresnelSchlick(vec3 dirIn, vec3 dirOut, vec3 normal, vec3 baseColor, float 
   return f0 + (1.0 - f0) * pow(clamp(1.0 - d, 0.0, 1.0), 5.0);
 }
 
-vec3 brdfCommon(vec3 dirIn, vec3 dirOut, vec3 colorIn, SurfacePointInfo info)
+float brdfSpecular(vec3 dirIn, vec3 dirOut, SurfacePointInfo info)
 {
-  vec3 finalColor = vec3(0.0);
-
   float d = distributionGgx(dirIn, dirOut, info.normal, info.roughness);
   float g = geometrySmith(dirIn, dirOut, info.normal, info.roughness);
-  vec3 f = fresnelSchlick(dirIn, dirOut, info.normal, info.baseColor, info.metallic);
 
-  vec3 numerator = d * g * f;
-  float denominator = 4.0 * max(0.0, dot(dirIn, info.normal)) * max(0.0, dot(dirOut, info.normal));
+  float numerator = d * g;
+  float denominator =
+    4.0 * max(0.0, dot(dirIn, info.normal)) * max(0.0, dot(dirOut, info.normal)) + 0.01;
 
-  vec3 specular = numerator / denominator;
+  return numerator / denominator;
+}
 
-  vec3 diffuse = (1.0 - f) * (1.0 - info.metallic) * info.baseColor / PI;
+vec3 brdfDiffuse(vec3 dirIn, vec3 dirOut, SurfacePointInfo info)
+{
+  return (1.0 - info.metalness) * info.albedo / PI;
+}
 
-  return (specular + diffuse) * max(0.0, dot(dirIn, info.normal)) * colorIn;
+vec3 brdf(vec3 dirIn, vec3 dirOut, SurfacePointInfo info)
+{
+  vec3 f = fresnelSchlick(dirIn, dirOut, info.normal, info.albedo, info.metalness);
+
+  float specular = brdfSpecular(dirIn, dirOut, info);
+  vec3 diffuse = brdfDiffuse(dirIn, dirOut, info);
+
+  return (f * specular + (1.0 - f) * diffuse) * max(0.0, dot(dirIn, info.normal));
 }
 
 #endif

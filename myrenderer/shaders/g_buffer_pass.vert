@@ -20,8 +20,8 @@ layout(push_constant) uniform params_t
 {
   mat4 mProjView;
   mat4 mModel;
-  vec4 baseColorMetallicFactor;
-  vec4 emissiveRoughnessFactors;
+  vec4 baseColorMetalnessFactor;
+  vec4 emissionRoughnessFactors;
 } params;
 
 void main()

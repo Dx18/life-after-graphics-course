@@ -1,10 +1,11 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include <etna/Image.hpp>
 #include <etna/Sampler.hpp>
 #include <etna/Buffer.hpp>
 #include <etna/GraphicsPipeline.hpp>
-#include <glm/glm.hpp>
 
 #include "render_utils/LineRenderer.hpp"
 #include "scene/SceneManager.hpp"
@@ -56,8 +57,9 @@ private:
 
   MaterialConstants getMaterialConstants(std::optional<std::size_t> material_index) const;
 
+  void doGeometryPass(vk::CommandBuffer cmd_buf);
   void doGBufferPass(vk::CommandBuffer cmd_buf);
-  void doLightingPasses(
+  void doResolvePass(
     vk::CommandBuffer cmd_buf, vk::Image target_image, vk::ImageView target_image_view);
 
 private:
@@ -70,37 +72,36 @@ private:
   etna::Sampler defaultSampler;
 
   etna::Image defaultBaseColorImage;
-  etna::Image defaultMetallicRoughnessImage;
+  etna::Image defaultMetalnessRoughnessImage;
   etna::Image defaultNormalImage;
   etna::Image defaultOcclusionImage;
-  etna::Image defaultEmissiveImage;
+  etna::Image defaultEmissionImage;
 
   // Co;or attachments for light passes
 
   struct GBuffer
   {
-    etna::Image baseColor;
-    etna::Image normal;
-    etna::Image emissive;
-    etna::Image occlusionMetallicRoughness;
+    std::array<etna::Image, 3> channels;
     etna::Image depth;
   };
 
   GBuffer gBuffer;
 
-  // View-projection matrix
+  // Camera parameters
 
   glm::mat4 viewProjection;
 
+  Camera camera;
+
   // Pipelines
 
+  etna::GraphicsPipeline geometryPassPipeline;
   etna::GraphicsPipeline gBufferPassPipeline;
+  etna::GraphicsPipeline resolvePassPipeline;
 
-  std::array<etna::GraphicsPipeline, std::tuple_size_v<KnownLightTypes>> lightPassPipelines;
-  etna::GraphicsPipeline emissiveLightPassPipeline;
-
-  void initGBufferPipeline();
-  void initLightPassPipelines(vk::Format swapchain_format);
+  void initGeometryPassPipeline();
+  void initGBufferPassPipeline();
+  void initResolvePassPipeline(vk::Format swapchain_format);
 
   // Debug stuff
 

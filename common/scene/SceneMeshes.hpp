@@ -9,6 +9,7 @@
 #include <etna/VertexInput.hpp>
 #include <etna/OneShotCmdMgr.hpp>
 
+
 // A single render element (relem) corresponds to a single draw call
 // of a certain pipeline with specific bindings (including material data)
 struct RenderElement

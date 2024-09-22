@@ -1,7 +1,40 @@
 #include "SceneLights.hpp"
 
+#include <optional>
+
 #include <etna/GlobalContext.hpp>
 
+
+template <typename T>
+struct GltfLightTryPack;
+
+template <>
+struct GltfLightTryPack<FinitePointLight>
+{
+  static std::optional<FinitePointLight> tryPack(
+    glm::mat4 transform, const tinygltf::Light& gltf_light);
+};
+
+template <>
+struct GltfLightTryPack<InfinitePointLight>
+{
+  static std::optional<InfinitePointLight> tryPack(
+    glm::mat4 transform, const tinygltf::Light& gltf_light);
+};
+
+template <>
+struct GltfLightTryPack<DirectionalLight>
+{
+  static std::optional<DirectionalLight> tryPack(
+    glm::mat4 transform, const tinygltf::Light& gltf_light);
+};
+
+template <>
+struct GltfLightTryPack<AmbientLight>
+{
+  static std::optional<AmbientLight> tryPack(
+    glm::mat4 transform, const tinygltf::Light& gltf_light);
+};
 
 std::optional<FinitePointLight> GltfLightTryPack<FinitePointLight>::tryPack(
   glm::mat4 transform, const tinygltf::Light& gltf_light)
@@ -69,6 +102,12 @@ std::optional<AmbientLight> GltfLightTryPack<AmbientLight>::tryPack(
   };
 }
 
+template <std::size_t, typename L>
+struct LightBufferData
+{
+  using Type = std::vector<L>;
+};
+
 void SceneLights::load(
   std::span<const glm::mat4> instance_matrices,
   const tinygltf::Model& model,
@@ -97,24 +136,47 @@ void SceneLights::load(
       });
   }
 
-  for_each_known_light_type(
-    [this, &transfer_helper, &one_shot_cmd_mgr, &data]<std::size_t I, typename L>() {
-      if (std::get<I>(data).empty())
-      {
-        return;
-      }
+  std::size_t bufferSize = std::tuple_size_v<KnownLightTypes> * sizeof(std::uint32_t);
 
-      auto& bufferData = std::get<I>(data);
+  bufferSize += (16 - bufferSize % 16) % 16;
 
-      buffers[I].buffer = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
-        .size = std::span(bufferData).size_bytes(),
-        .bufferUsage =
-          vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-        .name = fmt::format("lights_buffer_{}", I),
-      });
+  for_each_known_light_type([&data, &bufferSize]<std::size_t I, typename L>() {
+    bufferSize += std::span(std::get<I>(data)).size_bytes();
+  });
 
-      transfer_helper.uploadBuffer<L>(one_shot_cmd_mgr, buffers[I].buffer, 0, bufferData);
-      buffers[I].count = bufferData.size();
-    });
+  bufferSize += (16 - bufferSize % 16) % 16;
+
+  std::vector<std::byte> lightsData(bufferSize);
+
+  std::size_t offset = 0;
+
+  for_each_known_light_type([&data, &lightsData, &offset]<std::size_t I, typename L>() {
+    std::uint32_t* dataPtr = reinterpret_cast<std::uint32_t*>(lightsData.data() + offset);
+    *dataPtr = std::get<I>(data).size();
+    offset += sizeof(std::uint32_t);
+  });
+
+  offset += (16 - offset % 16) % 16;
+
+  for_each_known_light_type([&data, &lightsData, &offset]<std::size_t I, typename L>() {
+    L* dataPtr = reinterpret_cast<L*>(lightsData.data() + offset);
+
+    std::copy(std::get<I>(data).begin(), std::get<I>(data).end(), dataPtr);
+
+    offset += std::span(std::get<I>(data)).size_bytes();
+  });
+
+  lightsDataBuffer = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+    .size = std::span(lightsData).size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+    .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+    .name = "lights_data",
+  });
+
+  transfer_helper.uploadBuffer(one_shot_cmd_mgr, lightsDataBuffer, 0, lightsData);
+}
+
+const etna::Buffer& SceneLights::getLightsDataBuffer() const
+{
+  return lightsDataBuffer;
 }

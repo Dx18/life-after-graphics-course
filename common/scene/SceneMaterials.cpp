@@ -1,5 +1,6 @@
 #include "SceneMaterials.hpp"
 
+
 template <typename T, typename F>
   requires(std::is_invocable_r_v<std::uint8_t, F, T>)
 static std::vector<glm::u8vec4> transformPixelsImpl(
