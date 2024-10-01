@@ -125,10 +125,10 @@ void SceneMeshes::load(
         hasTexcoord ? &model.bufferViews[accessors[4]->bufferView] : nullptr,
       };
 
-      std::optional<std::size_t> material;
+      std::optional<MaterialIndex> material;
       if (prim.material != -1)
       {
-        material = prim.material;
+        material = static_cast<MaterialIndex>(prim.material);
       }
 
       ETNA_VERIFYF(prim.material != -1, "Expected material");

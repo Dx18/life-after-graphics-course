@@ -9,6 +9,8 @@
 #include <etna/VertexInput.hpp>
 #include <etna/OneShotCmdMgr.hpp>
 
+#include "SceneMaterials.hpp"
+
 
 // A single render element (relem) corresponds to a single draw call
 // of a certain pipeline with specific bindings (including material data)
@@ -18,7 +20,7 @@ struct RenderElement
   std::uint32_t indexOffset;
   std::uint32_t indexCount;
 
-  std::optional<std::size_t> material;
+  std::optional<MaterialIndex> material;
 };
 
 // A mesh is a collection of relems. A scene may have the same mesh

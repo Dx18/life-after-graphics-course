@@ -53,9 +53,9 @@ private:
   };
 
   etna::DescriptorSet createMaterialBindings(
-    vk::CommandBuffer command_buffer, std::optional<std::size_t> material_index) const;
+    vk::CommandBuffer command_buffer, std::optional<MaterialIndex> material_index) const;
 
-  MaterialConstants getMaterialConstants(std::optional<std::size_t> material_index) const;
+  MaterialConstants getMaterialConstants(std::optional<MaterialIndex> material_index) const;
 
   void doGeometryPass(vk::CommandBuffer cmd_buf);
   void doGBufferPass(vk::CommandBuffer cmd_buf);

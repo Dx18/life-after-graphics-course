@@ -158,10 +158,10 @@ void WorldRenderer::update(const FramePacket& packet)
 }
 
 etna::DescriptorSet WorldRenderer::createMaterialBindings(
-  vk::CommandBuffer command_buffer, std::optional<std::size_t> material_index) const
+  vk::CommandBuffer command_buffer, std::optional<MaterialIndex> material_index) const
 {
   auto createImageBinding =
-    [this](std::optional<std::size_t> texture_index, const etna::Image& fallback_image) {
+    [this](std::optional<TextureIndex> texture_index, const etna::Image& fallback_image) {
       const etna::Image* image;
       const etna::Sampler* sampler;
       if (texture_index.has_value())
@@ -181,7 +181,7 @@ etna::DescriptorSet WorldRenderer::createMaterialBindings(
       return image->genBinding(sampler->get(), vk::ImageLayout::eShaderReadOnlyOptimal);
     };
 
-  std::array<std::optional<std::size_t>, 5> textureIndices;
+  std::array<std::optional<TextureIndex>, 5> textureIndices;
 
   if (material_index.has_value())
   {
@@ -223,7 +223,7 @@ etna::DescriptorSet WorldRenderer::createMaterialBindings(
 }
 
 WorldRenderer::MaterialConstants WorldRenderer::getMaterialConstants(
-  std::optional<std::size_t> material_index) const
+  std::optional<MaterialIndex> material_index) const
 {
   glm::vec4 baseColorMetallicFactor = glm::vec4(1.0, 1.0, 1.0, 1.0);
   glm::vec4 emissiveRoughnessFactors = glm::vec4(0.0, 0.0, 0.0, 1.0);

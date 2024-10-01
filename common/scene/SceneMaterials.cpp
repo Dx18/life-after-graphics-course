@@ -161,8 +161,8 @@ void SceneMaterials::load(const tinygltf::Model& model, etna::OneShotCmdMgr& one
   for (const auto& texture : model.textures)
   {
     textures.push_back(Texture{
-      .image = static_cast<std::size_t>(texture.source),
-      .sampler = static_cast<std::size_t>(texture.sampler),
+      .image = static_cast<ImageIndex>(texture.source),
+      .sampler = static_cast<SamplerIndex>(texture.sampler),
     });
   }
 
@@ -176,7 +176,7 @@ void SceneMaterials::load(const tinygltf::Model& model, etna::OneShotCmdMgr& one
 
     if (pbr.baseColorTexture.index != -1)
     {
-      material.baseColorTexture = pbr.baseColorTexture.index;
+      material.baseColorTexture = static_cast<TextureIndex>(pbr.baseColorTexture.index);
     }
     material.baseColor = glm::vec4(
       pbr.baseColorFactor[0],
@@ -186,23 +186,24 @@ void SceneMaterials::load(const tinygltf::Model& model, etna::OneShotCmdMgr& one
 
     if (pbr.metallicRoughnessTexture.index != -1)
     {
-      material.metallicRoughnessTexture = pbr.metallicRoughnessTexture.index;
+      material.metallicRoughnessTexture =
+        static_cast<TextureIndex>(pbr.metallicRoughnessTexture.index);
     }
     material.metallicFactor = pbr.metallicFactor;
     material.roughnessFactor = pbr.roughnessFactor;
 
     if (gltfMaterial.normalTexture.index != -1)
     {
-      material.normalTexture = gltfMaterial.normalTexture.index;
+      material.normalTexture = static_cast<TextureIndex>(gltfMaterial.normalTexture.index);
     }
     if (gltfMaterial.occlusionTexture.index != -1)
     {
-      material.occlusionTexture = gltfMaterial.occlusionTexture.index;
+      material.occlusionTexture = static_cast<TextureIndex>(gltfMaterial.occlusionTexture.index);
     }
 
     if (gltfMaterial.emissiveTexture.index != -1)
     {
-      material.emissiveTexture = gltfMaterial.emissiveTexture.index;
+      material.emissiveTexture = static_cast<TextureIndex>(gltfMaterial.emissiveTexture.index);
     }
     material.emissiveFactor = glm::vec4(
       gltfMaterial.emissiveFactor[0],
@@ -214,42 +215,42 @@ void SceneMaterials::load(const tinygltf::Model& model, etna::OneShotCmdMgr& one
   }
 }
 
-const etna::Image& SceneMaterials::getImage(std::size_t image_index) const
+const etna::Image& SceneMaterials::getImage(ImageIndex image_index) const
 {
   ETNA_VERIFYF(
-    image_index < images.size(),
+    static_cast<std::size_t>(image_index) < images.size(),
     "The image index ({}) is greater than or equal to the number of images ({})",
-    image_index,
+    static_cast<std::size_t>(image_index),
     images.size());
-  return images[image_index];
+  return images[static_cast<std::size_t>(image_index)];
 }
 
-const etna::Sampler& SceneMaterials::getSampler(std::size_t sampler_index) const
+const etna::Sampler& SceneMaterials::getSampler(SamplerIndex sampler_index) const
 {
   ETNA_VERIFYF(
-    sampler_index < samplers.size(),
+    static_cast<std::size_t>(sampler_index) < samplers.size(),
     "The sampler index ({}) is greater than or equal to the number of samplers ({})",
-    sampler_index,
+    static_cast<std::size_t>(sampler_index),
     samplers.size());
-  return samplers[sampler_index];
+  return samplers[static_cast<std::size_t>(sampler_index)];
 }
 
-const Texture& SceneMaterials::getTexture(std::size_t texture_index) const
+const Texture& SceneMaterials::getTexture(TextureIndex texture_index) const
 {
   ETNA_VERIFYF(
-    texture_index < textures.size(),
+    static_cast<std::size_t>(texture_index) < textures.size(),
     "The texture index ({}) is greater than or equal to the number of textures ({})",
-    texture_index,
+    static_cast<std::size_t>(texture_index),
     textures.size());
-  return textures[texture_index];
+  return textures[static_cast<std::size_t>(texture_index)];
 }
 
-const Material& SceneMaterials::getMaterial(std::size_t material_index) const
+const Material& SceneMaterials::getMaterial(MaterialIndex material_index) const
 {
   ETNA_VERIFYF(
-    material_index < materials.size(),
+    static_cast<std::size_t>(material_index) < materials.size(),
     "The material index ({}) is greater than or equal to the number of materials ({})",
-    material_index,
+    static_cast<std::size_t>(material_index),
     materials.size());
-  return materials[material_index];
+  return materials[static_cast<std::size_t>(material_index)];
 }
