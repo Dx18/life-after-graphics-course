@@ -77,7 +77,17 @@ private:
   etna::Image defaultOcclusionImage;
   etna::Image defaultEmissionImage;
 
-  // Co;or attachments for light passes
+  // Frame parameters
+
+  struct FrameParams
+  {
+    glm::mat4 viewProjection;
+    glm::vec4 cameraPosition;
+  };
+
+  std::optional<etna::GpuSharedResource<etna::Buffer>> frameParamsBuffers;
+
+  // Color attachments for light passes
 
   struct GBuffer
   {

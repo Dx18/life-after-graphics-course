@@ -64,8 +64,8 @@ private:
   {
     // First 3 floats are position, 4th float is a packed normal
     glm::vec4 positionAndNormal;
-    // First 2 floats are tex coords, 3rd is a packed tangent, 4th is padding
-    glm::vec4 texCoordAndTangentAndPadding;
+    // First 2 floats are tex coords, 3rd and 4th are padding
+    glm::vec4 texCoordAndPadding;
   };
 
   static_assert(sizeof(Vertex) == sizeof(float) * 8);

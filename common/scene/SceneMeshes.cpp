@@ -95,17 +95,14 @@ void SceneMeshes::load(
       }
 
       const auto normalIt = prim.attributes.find("NORMAL");
-      const auto tangentIt = prim.attributes.find("TANGENT");
       const auto texcoordIt = prim.attributes.find("TEXCOORD_0");
 
       const bool hasNormals = normalIt != prim.attributes.end();
-      const bool hasTangents = tangentIt != prim.attributes.end();
       const bool hasTexcoord = texcoordIt != prim.attributes.end();
       std::array accessorIndices{
         prim.indices,
         prim.attributes.at("POSITION"),
         hasNormals ? normalIt->second : -1,
-        hasTangents ? tangentIt->second : -1,
         hasTexcoord ? texcoordIt->second : -1,
       };
 
@@ -113,16 +110,14 @@ void SceneMeshes::load(
         &model.accessors[prim.indices],
         &model.accessors[accessorIndices[1]],
         hasNormals ? &model.accessors[accessorIndices[2]] : nullptr,
-        hasTangents ? &model.accessors[accessorIndices[3]] : nullptr,
-        hasTexcoord ? &model.accessors[accessorIndices[4]] : nullptr,
+        hasTexcoord ? &model.accessors[accessorIndices[3]] : nullptr,
       };
 
       std::array bufViews{
         &model.bufferViews[accessors[0]->bufferView],
         &model.bufferViews[accessors[1]->bufferView],
         hasNormals ? &model.bufferViews[accessors[2]->bufferView] : nullptr,
-        hasTangents ? &model.bufferViews[accessors[3]->bufferView] : nullptr,
-        hasTexcoord ? &model.bufferViews[accessors[4]->bufferView] : nullptr,
+        hasTexcoord ? &model.bufferViews[accessors[3]->bufferView] : nullptr,
       };
 
       std::optional<MaterialIndex> material;
@@ -150,13 +145,9 @@ void SceneMeshes::load(
           ? reinterpret_cast<const std::byte*>(model.buffers[bufViews[2]->buffer].data.data()) +
             bufViews[2]->byteOffset + accessors[2]->byteOffset
           : nullptr,
-        hasTangents
+        hasTexcoord
           ? reinterpret_cast<const std::byte*>(model.buffers[bufViews[3]->buffer].data.data()) +
             bufViews[3]->byteOffset + accessors[3]->byteOffset
-          : nullptr,
-        hasTexcoord
-          ? reinterpret_cast<const std::byte*>(model.buffers[bufViews[4]->buffer].data.data()) +
-            bufViews[4]->byteOffset + accessors[4]->byteOffset
           : nullptr,
       };
 
@@ -174,15 +165,10 @@ void SceneMeshes::load(
                         : tinygltf::GetComponentSizeInBytes(accessors[2]->componentType) *
                           tinygltf::GetNumComponentsInType(accessors[2]->type))
                    : 0,
-        hasTangents ? (bufViews[3]->byteStride != 0
+        hasTexcoord ? (bufViews[3]->byteStride != 0
                          ? bufViews[3]->byteStride
                          : tinygltf::GetComponentSizeInBytes(accessors[3]->componentType) *
                            tinygltf::GetNumComponentsInType(accessors[3]->type))
-                    : 0,
-        hasTexcoord ? (bufViews[4]->byteStride != 0
-                         ? bufViews[4]->byteStride
-                         : tinygltf::GetComponentSizeInBytes(accessors[4]->componentType) *
-                           tinygltf::GetNumComponentsInType(accessors[4]->type))
                     : 0,
       };
 
@@ -191,10 +177,8 @@ void SceneMeshes::load(
         auto& vtx = vertices.emplace_back();
         glm::vec3 pos;
         // Fall back to 0 in case we don't have something.
-        // NOTE: if tangents are not available, one could use http://mikktspace.com/
         // NOTE: if normals are not available, reconstructing them is possible but will look ugly
         glm::vec3 normal{0};
-        glm::vec3 tangent{0};
         glm::vec2 texcoord{0};
         std::memcpy(&pos, ptrs[1], sizeof(pos));
 
@@ -202,23 +186,18 @@ void SceneMeshes::load(
         // do ifs at runtime. Also, SIMD should be used. Try implementing this!
         if (hasNormals)
           std::memcpy(&normal, ptrs[2], sizeof(normal));
-        if (hasTangents)
-          std::memcpy(&tangent, ptrs[3], sizeof(tangent));
         if (hasTexcoord)
-          std::memcpy(&texcoord, ptrs[4], sizeof(texcoord));
+          std::memcpy(&texcoord, ptrs[3], sizeof(texcoord));
 
 
         vtx.positionAndNormal = glm::vec4(pos, std::bit_cast<float>(encode_normal(normal)));
-        vtx.texCoordAndTangentAndPadding =
-          glm::vec4(texcoord, std::bit_cast<float>(encode_normal(tangent)), 0);
+        vtx.texCoordAndPadding = glm::vec4(texcoord, 0.0, 0.0);
 
         ptrs[1] += strides[1];
         if (hasNormals)
           ptrs[2] += strides[2];
-        if (hasTangents)
-          ptrs[3] += strides[3];
         if (hasTexcoord)
-          ptrs[4] += strides[4];
+          ptrs[3] += strides[3];
       }
 
       // Indices are guaranteed to have no stride

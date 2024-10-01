@@ -100,6 +100,17 @@ void WorldRenderer::allocateResources(glm::uvec2 swapchain_resolution)
     },
     commandBuffer,
     std::array<std::uint8_t, 4>{0x00, 0x00, 0x00, 0x00}.data());
+
+  frameParamsBuffers.emplace(ctx.getMainWorkCount(), std::in_place);
+  frameParamsBuffers->iterate([&ctx](etna::Buffer& buffer) {
+    buffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+      .size = sizeof(frameParamsBuffers),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+      .name = "frame_params_buffer",
+    });
+    buffer.map();
+  });
 }
 
 void WorldRenderer::loadScene(std::filesystem::path path)
@@ -211,9 +222,13 @@ etna::DescriptorSet WorldRenderer::createMaterialBindings(
   }
 
   std::vector<etna::Binding> bindings;
+  bindings.push_back(etna::Binding{
+    0,
+    frameParamsBuffers->get().genBinding(),
+  });
   for (std::size_t i = 0; i < textureIndices.size(); ++i)
   {
-    bindings.push_back(etna::Binding{static_cast<std::uint32_t>(i), imageBindings[i]});
+    bindings.push_back(etna::Binding{static_cast<std::uint32_t>(i + 1), imageBindings[i]});
   }
 
   auto gBufferPassInfo = etna::get_shader_program("g_buffer_pass");
@@ -272,10 +287,21 @@ void WorldRenderer::doGeometryPass(vk::CommandBuffer command_buffer)
   command_buffer.bindVertexBuffers(0, {sceneMeshes.getVertexBuffer()}, {0});
   command_buffer.bindIndexBuffer(sceneMeshes.getIndexBuffer(), 0, vk::IndexType::eUint32);
 
-  TransformConstants transformConstants = {
-    .viewProjection = viewProjection,
-    .model = glm::mat4(1.0),
-  };
+  auto geometryPassInfo = etna::get_shader_program("geometry_pass");
+
+  auto set = etna::create_descriptor_set(
+    geometryPassInfo.getDescriptorLayoutId(0),
+    command_buffer,
+    {
+      etna::Binding{0, frameParamsBuffers->get().genBinding()},
+    });
+
+  command_buffer.bindDescriptorSets(
+    vk::PipelineBindPoint::eGraphics,
+    geometryPassPipeline.getVkPipelineLayout(),
+    0,
+    {set.getVkSet()},
+    {});
 
   auto instanceMatrices = sceneMgr->getInstanceMatrices();
 
@@ -286,7 +312,14 @@ void WorldRenderer::doGeometryPass(vk::CommandBuffer command_buffer)
 
   for (std::size_t instIdx = 0; instIdx < meshInstances.size(); ++instIdx)
   {
-    transformConstants.model = instanceMatrices[instIdx];
+    struct TransformConstants
+    {
+      glm::mat3x4 modelTransposed;
+    };
+
+    TransformConstants transformConstants{
+      .modelTransposed = glm::mat3x4(glm::transpose(instanceMatrices[instIdx])),
+    };
 
     command_buffer.pushConstants<TransformConstants>(
       geometryPassPipeline.getVkPipelineLayout(),
@@ -333,12 +366,6 @@ void WorldRenderer::doGBufferPass(vk::CommandBuffer command_buffer)
   command_buffer.bindPipeline(
     vk::PipelineBindPoint::eGraphics, gBufferPassPipeline.getVkPipeline());
 
-  struct TransformConstants
-  {
-    glm::mat4 viewProjection;
-    glm::mat4 model;
-  };
-
   const SceneMeshes& sceneMeshes = sceneMgr->getMeshes();
 
   if (!sceneMeshes.getVertexBuffer())
@@ -349,10 +376,14 @@ void WorldRenderer::doGBufferPass(vk::CommandBuffer command_buffer)
   command_buffer.bindVertexBuffers(0, {sceneMeshes.getVertexBuffer()}, {0});
   command_buffer.bindIndexBuffer(sceneMeshes.getIndexBuffer(), 0, vk::IndexType::eUint32);
 
-  TransformConstants transformConstants = {
+  etna::Buffer& frameParamsBuffer = frameParamsBuffers->get();
+
+  FrameParams frameParams = {
     .viewProjection = viewProjection,
-    .model = glm::mat4(1.0),
+    .cameraPosition = glm::vec4(camera.position, 1.0),
   };
+
+  std::memcpy(frameParamsBuffer.data(), &frameParams, sizeof(frameParams));
 
   auto instanceMatrices = sceneMgr->getInstanceMatrices();
 
@@ -363,7 +394,14 @@ void WorldRenderer::doGBufferPass(vk::CommandBuffer command_buffer)
 
   for (std::size_t instIdx = 0; instIdx < meshInstances.size(); ++instIdx)
   {
-    transformConstants.model = instanceMatrices[instIdx];
+    struct TransformConstants
+    {
+      glm::mat3x4 modelTransposed;
+    };
+
+    TransformConstants transformConstants{
+      .modelTransposed = glm::mat3x4(glm::transpose(instanceMatrices[instIdx])),
+    };
 
     command_buffer.pushConstants<TransformConstants>(
       gBufferPassPipeline.getVkPipelineLayout(),
