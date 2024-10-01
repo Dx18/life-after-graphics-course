@@ -23,10 +23,6 @@ void Renderer::initVulkan(std::span<const char*> instance_extensions)
   for (auto ext : instance_extensions)
     instanceExtensions.push_back(ext);
 
-#ifndef NDEBUG
-  instanceExtensions.push_back("VK_EXT_debug_report");
-#endif
-
   std::vector<const char*> deviceExtensions;
 
   deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
@@ -161,7 +157,7 @@ void Renderer::drawFrame()
       etna::set_state(
         currentCmdBuf,
         image,
-        vk::PipelineStageFlagBits2::eBottomOfPipe,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
         {},
         vk::ImageLayout::ePresentSrcKHR,
         vk::ImageAspectFlagBits::eColor);
