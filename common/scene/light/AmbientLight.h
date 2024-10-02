@@ -3,10 +3,7 @@
 
 #include "cpp_glsl_compat.h"
 
-<<<<<<< HEAD
 
-=======
->>>>>>> f2882a9 (Added task 1)
 struct AmbientLight
 {
   shader_vec4 colorIntensity;

@@ -2,10 +2,7 @@
 
 #include <etna/GlobalContext.hpp>
 
-<<<<<<< HEAD
 
-=======
->>>>>>> f2882a9 (Added task 1)
 static std::uint32_t encode_normal(glm::vec3 normal)
 {
   const std::int32_t x = static_cast<std::int32_t>(normal.x * 32767.0f);
@@ -98,26 +95,14 @@ void SceneMeshes::load(
       }
 
       const auto normalIt = prim.attributes.find("NORMAL");
-<<<<<<< HEAD
       const auto texcoordIt = prim.attributes.find("TEXCOORD_0");
 
       const bool hasNormals = normalIt != prim.attributes.end();
-=======
-      const auto tangentIt = prim.attributes.find("TANGENT");
-      const auto texcoordIt = prim.attributes.find("TEXCOORD_0");
-
-      const bool hasNormals = normalIt != prim.attributes.end();
-      const bool hasTangents = tangentIt != prim.attributes.end();
->>>>>>> f2882a9 (Added task 1)
       const bool hasTexcoord = texcoordIt != prim.attributes.end();
       std::array accessorIndices{
         prim.indices,
         prim.attributes.at("POSITION"),
         hasNormals ? normalIt->second : -1,
-<<<<<<< HEAD
-=======
-        hasTangents ? tangentIt->second : -1,
->>>>>>> f2882a9 (Added task 1)
         hasTexcoord ? texcoordIt->second : -1,
       };
 
@@ -125,19 +110,13 @@ void SceneMeshes::load(
         &model.accessors[prim.indices],
         &model.accessors[accessorIndices[1]],
         hasNormals ? &model.accessors[accessorIndices[2]] : nullptr,
-<<<<<<< HEAD
         hasTexcoord ? &model.accessors[accessorIndices[3]] : nullptr,
-=======
-        hasTangents ? &model.accessors[accessorIndices[3]] : nullptr,
-        hasTexcoord ? &model.accessors[accessorIndices[4]] : nullptr,
->>>>>>> f2882a9 (Added task 1)
       };
 
       std::array bufViews{
         &model.bufferViews[accessors[0]->bufferView],
         &model.bufferViews[accessors[1]->bufferView],
         hasNormals ? &model.bufferViews[accessors[2]->bufferView] : nullptr,
-<<<<<<< HEAD
         hasTexcoord ? &model.bufferViews[accessors[3]->bufferView] : nullptr,
       };
 
@@ -145,16 +124,6 @@ void SceneMeshes::load(
       if (prim.material != -1)
       {
         material = static_cast<MaterialIndex>(prim.material);
-=======
-        hasTangents ? &model.bufferViews[accessors[3]->bufferView] : nullptr,
-        hasTexcoord ? &model.bufferViews[accessors[4]->bufferView] : nullptr,
-      };
-
-      std::optional<std::size_t> material;
-      if (prim.material != -1)
-      {
-        material = prim.material;
->>>>>>> f2882a9 (Added task 1)
       }
 
       ETNA_VERIFYF(prim.material != -1, "Expected material");
@@ -176,21 +145,10 @@ void SceneMeshes::load(
           ? reinterpret_cast<const std::byte*>(model.buffers[bufViews[2]->buffer].data.data()) +
             bufViews[2]->byteOffset + accessors[2]->byteOffset
           : nullptr,
-<<<<<<< HEAD
         hasTexcoord
           ? reinterpret_cast<const std::byte*>(model.buffers[bufViews[3]->buffer].data.data()) +
             bufViews[3]->byteOffset + accessors[3]->byteOffset
           : nullptr,
-=======
-        hasTangents
-          ? reinterpret_cast<const std::byte*>(model.buffers[bufViews[3]->buffer].data.data()) +
-            bufViews[3]->byteOffset + accessors[3]->byteOffset
-          : nullptr,
-        hasTexcoord
-          ? reinterpret_cast<const std::byte*>(model.buffers[bufViews[4]->buffer].data.data()) +
-            bufViews[4]->byteOffset + accessors[4]->byteOffset
-          : nullptr,
->>>>>>> f2882a9 (Added task 1)
       };
 
       std::array strides{
@@ -207,23 +165,11 @@ void SceneMeshes::load(
                         : tinygltf::GetComponentSizeInBytes(accessors[2]->componentType) *
                           tinygltf::GetNumComponentsInType(accessors[2]->type))
                    : 0,
-<<<<<<< HEAD
         hasTexcoord ? (bufViews[3]->byteStride != 0
-=======
-        hasTangents ? (bufViews[3]->byteStride != 0
->>>>>>> f2882a9 (Added task 1)
                          ? bufViews[3]->byteStride
                          : tinygltf::GetComponentSizeInBytes(accessors[3]->componentType) *
                            tinygltf::GetNumComponentsInType(accessors[3]->type))
                     : 0,
-<<<<<<< HEAD
-=======
-        hasTexcoord ? (bufViews[4]->byteStride != 0
-                         ? bufViews[4]->byteStride
-                         : tinygltf::GetComponentSizeInBytes(accessors[4]->componentType) *
-                           tinygltf::GetNumComponentsInType(accessors[4]->type))
-                    : 0,
->>>>>>> f2882a9 (Added task 1)
       };
 
       for (std::size_t i = 0; i < vertexCount; ++i)
@@ -231,15 +177,8 @@ void SceneMeshes::load(
         auto& vtx = vertices.emplace_back();
         glm::vec3 pos;
         // Fall back to 0 in case we don't have something.
-<<<<<<< HEAD
         // NOTE: if normals are not available, reconstructing them is possible but will look ugly
         glm::vec3 normal{0};
-=======
-        // NOTE: if tangents are not available, one could use http://mikktspace.com/
-        // NOTE: if normals are not available, reconstructing them is possible but will look ugly
-        glm::vec3 normal{0};
-        glm::vec3 tangent{0};
->>>>>>> f2882a9 (Added task 1)
         glm::vec2 texcoord{0};
         std::memcpy(&pos, ptrs[1], sizeof(pos));
 
@@ -247,37 +186,18 @@ void SceneMeshes::load(
         // do ifs at runtime. Also, SIMD should be used. Try implementing this!
         if (hasNormals)
           std::memcpy(&normal, ptrs[2], sizeof(normal));
-<<<<<<< HEAD
         if (hasTexcoord)
           std::memcpy(&texcoord, ptrs[3], sizeof(texcoord));
 
 
         vtx.positionAndNormal = glm::vec4(pos, std::bit_cast<float>(encode_normal(normal)));
         vtx.texCoordAndPadding = glm::vec4(texcoord, 0.0, 0.0);
-=======
-        if (hasTangents)
-          std::memcpy(&tangent, ptrs[3], sizeof(tangent));
-        if (hasTexcoord)
-          std::memcpy(&texcoord, ptrs[4], sizeof(texcoord));
-
-
-        vtx.positionAndNormal = glm::vec4(pos, std::bit_cast<float>(encode_normal(normal)));
-        vtx.texCoordAndTangentAndPadding =
-          glm::vec4(texcoord, std::bit_cast<float>(encode_normal(tangent)), 0);
->>>>>>> f2882a9 (Added task 1)
 
         ptrs[1] += strides[1];
         if (hasNormals)
           ptrs[2] += strides[2];
-<<<<<<< HEAD
         if (hasTexcoord)
           ptrs[3] += strides[3];
-=======
-        if (hasTangents)
-          ptrs[3] += strides[3];
-        if (hasTexcoord)
-          ptrs[4] += strides[4];
->>>>>>> f2882a9 (Added task 1)
       }
 
       // Indices are guaranteed to have no stride
