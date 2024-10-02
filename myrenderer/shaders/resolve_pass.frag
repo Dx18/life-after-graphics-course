@@ -144,6 +144,8 @@ void main()
       params.cameraViewDirZNear.w,
       params.cameraViewUpDirZFar.w));
 
+  info.normal = normalize(info.normal);
+
   vec3 cameraDir = normalize(params.cameraPositionAspect.xyz - info.position);
 
   out_fragColor = vec4(getColor(info, cameraDir), 1.0);

@@ -14,7 +14,7 @@ float distributionGgx(vec3 dirIn, vec3 dirOut, vec3 normal, float roughness)
 
   vec3 h = normalize(dirIn + dirOut);
 
-  float d = max(0.0, dot(normal, h));
+  float d = clamp(dot(normal, h), 0.0, 1.0);
 
   float denominator = d * d * (roughness2 * roughness2 - 1.0) + 1.0;
   denominator *= denominator;
