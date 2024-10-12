@@ -10,7 +10,8 @@ layout(location = 0) in VS_OUT
   vec3 wPos;
   vec3 wNorm;
   vec2 texCoord;
-} surf;
+}
+surf;
 
 layout(location = 0) out vec4 out_channel0;
 layout(location = 1) out vec4 out_channel1;
@@ -21,13 +22,15 @@ layout(push_constant) uniform params_t
   mat3x4 modelTransposed;
   vec4 baseColorMetalnessFactor;
   vec4 emissionRoughnessFactors;
-} params;
+}
+params;
 
 layout(binding = 0, set = 0) uniform frameParams_t
 {
   mat4 viewProjection;
   vec4 cameraPosition;
-} frameParams;
+}
+frameParams;
 
 layout(binding = 1, set = 0) uniform sampler2D baseColorTexture;
 layout(binding = 2, set = 0) uniform sampler2D metalnessRoughnessTexture;
@@ -35,7 +38,8 @@ layout(binding = 3, set = 0) uniform sampler2D normalTexture;
 layout(binding = 4, set = 0) uniform sampler2D occlusionTexture;
 layout(binding = 5, set = 0) uniform sampler2D emissionTexture;
 
-mat3 cotangentFrame(vec3 normal, vec3 position, vec2 texCoord) {
+mat3 cotangentFrame(vec3 normal, vec3 position, vec2 texCoord)
+{
   vec3 dPositionX = dFdx(position);
   vec3 dPositionY = dFdy(position);
   vec2 dTexCoordX = dFdx(texCoord);
@@ -66,9 +70,13 @@ void main()
   vec3 emission = texture(emissionTexture, surf.texCoord).rgb * params.emissionRoughnessFactors.rgb;
 
   float occlusion = texture(occlusionTexture, surf.texCoord).r;
-  vec2 metalnessRoughness = texture(metalnessRoughnessTexture, surf.texCoord).bg * vec2(params.baseColorMetalnessFactor.a, params.emissionRoughnessFactors.a);
+  vec2 metalnessRoughness = texture(metalnessRoughnessTexture, surf.texCoord).bg *
+    vec2(params.baseColorMetalnessFactor.a, params.emissionRoughnessFactors.a);
 
   SurfacePointInfo info;
+
+  info.materialType =
+    length(emission) > 0.07 ? MATERIAL_TYPE_EMISSIVE : MATERIAL_TYPE_METALLIC;
 
   info.albedo = albedo;
   info.normal = actualNormal;
