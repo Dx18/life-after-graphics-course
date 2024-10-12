@@ -10,16 +10,16 @@ const float PI = 3.14159265359;
 
 float distributionGgx(vec3 dirIn, vec3 dirOut, vec3 normal, float roughness)
 {
-  float roughness2 = roughness * roughness;
+  float ggxAlpha = roughness * roughness;
 
   vec3 h = normalize(dirIn + dirOut);
 
   float d = clamp(dot(normal, h), 0.0, 1.0);
 
-  float denominator = d * d * (roughness2 * roughness2 - 1.0) + 1.0;
+  float denominator = d * d * (ggxAlpha * ggxAlpha - 1.0) + 1.0;
   denominator *= denominator;
 
-  return roughness2 * roughness2 / denominator / PI;
+  return ggxAlpha * ggxAlpha / denominator / PI;
 }
 
 float geometrySchlickGgx(vec3 v, vec3 normal, float roughness)
