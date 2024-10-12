@@ -7,7 +7,7 @@
 struct InfinitePointLight
 {
   shader_vec4 position;
-  shader_vec4 colorIntensity;
+  shader_vec4 color;
 };
 
 

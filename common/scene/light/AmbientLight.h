@@ -6,7 +6,7 @@
 
 struct AmbientLight
 {
-  shader_vec4 colorIntensity;
+  shader_vec4 color;
 };
 
 

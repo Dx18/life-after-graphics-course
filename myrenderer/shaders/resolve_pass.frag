@@ -51,10 +51,10 @@ vec3 getFinitePointLightColor(uint offset, SurfacePointInfo info, vec3 cameraDir
   float lightDistance = length(lightVec);
   vec3 lightDir = normalize(lightVec);
 
-  float attenuation = clamp(1.0 - pow(lightDistance / light.positionRange.w, 4.0), 0.0, 1.0) / (lightDistance * lightDistance);
+  float attenuation = clamp(1.0 - pow(lightDistance / light.positionRange.w, 4.0), 0.0, 1.0) /
+    (lightDistance * lightDistance);
 
-  return brdf(lightDir, cameraDir, info) * attenuation * info.occlusion *
-    light.colorIntensity.w * light.colorIntensity.rgb;
+  return brdf(lightDir, cameraDir, info) * attenuation * info.occlusion * light.color.rgb;
 }
 
 vec3 getInfinitePointLightColor(uint offset, SurfacePointInfo info, vec3 cameraDir)
@@ -68,8 +68,7 @@ vec3 getInfinitePointLightColor(uint offset, SurfacePointInfo info, vec3 cameraD
 
   float attenuation = 1.0 / (lightDistance * lightDistance);
 
-  return brdf(lightDir, cameraDir, info) * attenuation * info.occlusion *
-    light.colorIntensity.w * light.colorIntensity.rgb;
+  return brdf(lightDir, cameraDir, info) * attenuation * info.occlusion * light.color.rgb;
 }
 
 vec3 getDirectionalLightColor(uint offset, SurfacePointInfo info, vec3 cameraDir)
@@ -79,15 +78,14 @@ vec3 getDirectionalLightColor(uint offset, SurfacePointInfo info, vec3 cameraDir
 
   vec3 lightDir = light.direction.xyz;
 
-  return brdf(lightDir, cameraDir, info) * info.occlusion *
-    light.colorIntensity.w * light.colorIntensity.rgb;
+  return brdf(lightDir, cameraDir, info) * info.occlusion * light.color.rgb;
 }
 
 vec3 getAmbientLightColor(uint offset, SurfacePointInfo info, vec3 cameraDir)
 {
   AmbientLight light = AmbientLight(lightsData.lights[offset]);
 
-  return (1.0 - info.metalness) * info.albedo / PI * info.occlusion * light.colorIntensity.w * light.colorIntensity.rgb;
+  return brdf(info.normal, cameraDir, info) * info.occlusion * light.color.rgb;
 }
 
 vec3 getColor(SurfacePointInfo info, vec3 cameraDir)

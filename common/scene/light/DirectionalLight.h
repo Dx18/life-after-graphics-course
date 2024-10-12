@@ -7,7 +7,7 @@
 struct DirectionalLight
 {
   shader_vec4 direction;
-  shader_vec4 colorIntensity;
+  shader_vec4 color;
 };
 
 

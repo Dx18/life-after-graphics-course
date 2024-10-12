@@ -49,7 +49,7 @@ std::optional<FinitePointLight> GltfLightTryPack<FinitePointLight>::tryPack(
 
   return FinitePointLight{
     .positionRange = glm::vec4(position, gltf_light.range),
-    .colorIntensity = glm::vec4(color, gltf_light.intensity),
+    .color = glm::vec4(color * static_cast<float>(gltf_light.intensity), 0.0),
   };
 }
 
@@ -66,7 +66,7 @@ std::optional<InfinitePointLight> GltfLightTryPack<InfinitePointLight>::tryPack(
 
   return InfinitePointLight{
     .position = glm::vec4(position, 0.0),
-    .colorIntensity = glm::vec4(color, gltf_light.intensity),
+    .color = glm::vec4(color * static_cast<float>(gltf_light.intensity), 0.0),
   };
 }
 
@@ -83,7 +83,7 @@ std::optional<DirectionalLight> GltfLightTryPack<DirectionalLight>::tryPack(
 
   return DirectionalLight{
     .direction = glm::vec4(direction, 0.0),
-    .colorIntensity = glm::vec4(color, gltf_light.intensity),
+    .color = glm::vec4(color * static_cast<float>(gltf_light.intensity), 0.0),
   };
 }
 
@@ -98,7 +98,7 @@ std::optional<AmbientLight> GltfLightTryPack<AmbientLight>::tryPack(
   glm::vec3 color = glm::vec3(gltf_light.color[0], gltf_light.color[1], gltf_light.color[2]);
 
   return AmbientLight{
-    .colorIntensity = glm::vec4(color, gltf_light.intensity),
+    .color = glm::vec4(color * static_cast<float>(gltf_light.intensity), 0.0),
   };
 }
 
