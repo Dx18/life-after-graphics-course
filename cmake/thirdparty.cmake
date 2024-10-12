@@ -54,7 +54,7 @@ CPMAddPackage(
 CPMAddPackage(
   NAME etna
   GITHUB_REPOSITORY Dx18/etna
-  GIT_TAG synchronization2-layer-removal
+  GIT_TAG spirv-reflect-git-tag-fix
   VERSION 1.0.0
   OPTIONS
     "SPIRV_REFLECT_VERSION_SMART_SEARCH ON"
