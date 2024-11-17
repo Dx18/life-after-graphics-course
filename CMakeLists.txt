@@ -37,3 +37,4 @@ include("cmake/shaders.cmake")
 
 add_subdirectory(common)
 add_subdirectory(myrenderer)
+add_subdirectory(prototyping)
