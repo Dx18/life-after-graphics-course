@@ -33,9 +33,6 @@ public:
     vk::CommandBuffer command_buffer, vk::Image target_image, vk::ImageView target_image_view);
 
 private:
-  void fillCubemap(vk::CommandBuffer command_buffer);
-  void bakeDiffuseCubemap(vk::CommandBuffer command_buffer);
-
   void doCubemapPass(
     vk::CommandBuffer command_buffer, vk::Image target_image, vk::ImageView target_image_view);
   void doSpherePass(vk::CommandBuffer command_buffer);
@@ -46,7 +43,6 @@ private:
   enum struct DiffuseMode
   {
     DYNAMIC,
-    CUBEMAP,
     SPHERICAL_HARMONICS,
   };
 
@@ -58,9 +54,9 @@ private:
 
   etna::Image mainTarget;
 
-  // Diffuse cubemap
+  // Sphere samples
 
-  etna::Image diffuseCubemap;
+  etna::Buffer sphereSamples;
 
   // Diffuse spherical harmonics
 
@@ -80,26 +76,73 @@ private:
 
   glm::uint time{0};
 
-  DiffuseMode diffuseMode{DiffuseMode::CUBEMAP};
+  DiffuseMode diffuseMode{DiffuseMode::SPHERICAL_HARMONICS};
 
   // Pipelines
 
   etna::GraphicsPipeline cubemapPipeline;
 
   etna::GraphicsPipeline dynamicDiffusePipeline;
-  etna::GraphicsPipeline cubemapDiffusePipeline;
   etna::GraphicsPipeline sphericalHarmonicsDiffusePipeline;
 
   etna::GraphicsPipeline sceneBlendPipeline;
 
   // Late resource initialization
 
-  bool isFirstFrame{true};
+  // bool isFirstFrame{true};
+
+  class ResourcesPrepareContext
+  {
+  public:
+    ResourcesPrepareContext(
+      const etna::Image& cubemap,
+      const etna::Buffer& sphere_samples,
+      const etna::Buffer& diffuse_spherical_harmonics);
+
+    void prepareResources();
+
+  private:
+    // Default sampler
+
+    etna::Sampler defaultSampler;
+
+    // Cubemap
+
+    const etna::Image& cubemap;
+
+    // Cubemap filling resources
+
+    etna::Buffer cubemapStagingBuffer;
+
+    // Sphere samples
+
+    const etna::Buffer& sphereSamples;
+
+    // Sphere samples filling resources
+
+    etna::Buffer sphereSamplesStagingBuffer;
+
+    // Diffuse spherical harmonics
+
+    const etna::Buffer& diffuseSphericalHarmonics;
+
+    // Diffuse spherical harmonics filling resources
+
+    etna::ComputePipeline diffuseSphericalHarmonicsBakePipeline;
+
+    etna::Buffer diffuseSphericalHarmonicSamplesStagingBuffer;
+    etna::Buffer diffuseSphericalHarmonicSamples;
+
+    void fillCubemap(vk::CommandBuffer command_buffer);
+    void fillSphereSamples(vk::CommandBuffer command_buffer);
+    void bakeDiffuseSphericalHarmonics(vk::CommandBuffer command_buffer);
+  };
+
+  std::optional<ResourcesPrepareContext> prepareContext;
 
   void initCubemapPipeline(vk::Format swapchain_format);
 
   void initDynamicDiffusePipeline();
-  void initCubemapDiffusePipeline();
   void initSphericalHarmonicsDiffusePipeline();
 
   void initSceneBlendPipeline(vk::Format swapchain_format);

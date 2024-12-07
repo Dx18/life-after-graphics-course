@@ -3,7 +3,7 @@
 #extension GL_GOOGLE_include_directive : require
 
 
-#include "../EnvironmentDiffuse.h"
+#include "generated/SphereSamples.inc"
 
 layout(location = 0) in VS_OUT
 {
@@ -21,6 +21,18 @@ layout(push_constant) uniform params_t
 params;
 
 layout(binding = 0, set = 0) uniform samplerCube cubemap;
+
+layout(binding = 1, set = 0, std140) uniform samples_t
+{
+  vec4 sampleDirections[sphereSamples_sampleCount];
+}
+samples;
+
+
+#define SAMPLE_COUNT sphereSamples_sampleCount
+#define SAMPLE_DIRECTIONS_ARRAY samples.sampleDirections
+#include "../impl/EnvironmentDiffuse.inc"
+
 
 uint getSeed()
 {

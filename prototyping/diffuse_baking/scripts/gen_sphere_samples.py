@@ -26,8 +26,6 @@ def generate_sphere_samples(resolution: int) -> list[(float, float)]:
 
 GLSL_CONST_NAME_SAMPLE_COUNT = "sphereSamples_sampleCount"
 
-GLSL_CONST_NAME_SAMPLE_DIRECTIONS = "sphereSamples_sampleDirections"
-
 
 def write_output_glsl(
         output_file: io.TextIOWrapper,
@@ -40,7 +38,6 @@ def write_output_glsl(
 
     output_file.write(
         f"const uint {GLSL_CONST_NAME_SAMPLE_COUNT} = {len(directions)};\n"
-        f"const vec3 {GLSL_CONST_NAME_SAMPLE_DIRECTIONS}[] = vec3[]({directions_string});\n"
     )
 
 

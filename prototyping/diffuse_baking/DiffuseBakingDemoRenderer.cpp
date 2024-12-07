@@ -13,6 +13,7 @@
 #include <etna/Profiling.hpp>
 
 
+#include "generated/SphereSamples.hpp"
 #include "generated/SphereMesh.hpp"
 #include "generated/SphericalHarmonicSamples.hpp"
 
@@ -78,14 +79,17 @@ void DiffuseBakingDemoRenderer::allocateResources(glm::uvec2 swapchain_resolutio
     .layers = 6,
   });
 
-  diffuseCubemap = ctx.createImage(etna::Image::CreateInfo{
-    .flags = vk::ImageCreateFlagBits::eCubeCompatible,
-    .extent = vk::Extent3D{512, 512, 1},
-    .name = "diffuse_cubemap",
-    .format = vk::Format::eR8G8B8A8Unorm,
-    .imageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
-    .layers = 6,
-  });
+  {
+    namespace samples = generated::sphere_samples;
+
+    sphereSamples = ctx.createBuffer(etna::Buffer::CreateInfo{
+      .size = std::span(samples::SAMPLE_DIRECTIONS).size_bytes(),
+      .bufferUsage =
+        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "sphere_samples",
+    });
+  }
 
   diffuseSphericalHarmonics = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = (generated::spherical_harmonic_samples::MAX_BAND + 1) *
@@ -141,417 +145,327 @@ void DiffuseBakingDemoRenderer::setupPipelines(vk::Format swapchain_format)
   initCubemapPipeline(swapchain_format);
 
   initDynamicDiffusePipeline();
-  initCubemapDiffusePipeline();
   initSphericalHarmonicsDiffusePipeline();
 
   initSceneBlendPipeline(swapchain_format);
 }
 
-class ResourcesPrepareContext
+DiffuseBakingDemoRenderer::ResourcesPrepareContext::ResourcesPrepareContext(
+  const etna::Image& cubemap,
+  const etna::Buffer& sphere_samples,
+  const etna::Buffer& diffuse_spherical_harmonics)
+  : cubemap(cubemap)
+  , sphereSamples(sphere_samples)
+  , diffuseSphericalHarmonics(diffuse_spherical_harmonics)
 {
-public:
-  ResourcesPrepareContext(
-    const etna::Image& cubemap,
-    const etna::Image& diffuse_cubemap,
-    const etna::Buffer& diffuse_spherical_harmonics)
-    : cubemap(cubemap)
-    , diffuseCubemap(diffuse_cubemap)
-    , diffuseSphericalHarmonics(diffuse_spherical_harmonics)
-  {
-    defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{
-      .name = "default_sampler",
-    });
-  }
+  defaultSampler = etna::Sampler(etna::Sampler::CreateInfo{
+    .name = "default_sampler",
+  });
+}
 
-  void prepareResources()
-  {
-    spdlog::info("Preparing resources...");
+void DiffuseBakingDemoRenderer::ResourcesPrepareContext::prepareResources()
+{
+  spdlog::info("Preparing resources...");
 
-    auto& ctx = etna::get_context();
+  auto& ctx = etna::get_context();
 
-    vk::UniqueCommandPool commandPool =
-      etna::unwrap_vk_result(ctx.getDevice().createCommandPoolUnique(vk::CommandPoolCreateInfo{
-        .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-        .queueFamilyIndex = ctx.getQueueFamilyIdx(),
-      }));
-
-    vk::UniqueCommandBuffer commandBuffer = std::move(etna::unwrap_vk_result(
-      ctx.getDevice().allocateCommandBuffersUnique(vk::CommandBufferAllocateInfo{
-        .commandPool = commandPool.get(),
-        .level = vk::CommandBufferLevel::ePrimary,
-        .commandBufferCount = 1,
-      }))[0]);
-
-    vk::UniqueFence fence =
-      etna::unwrap_vk_result(ctx.getDevice().createFenceUnique(vk::FenceCreateInfo{}));
-
-    ETNA_CHECK_VK_RESULT(commandBuffer->begin(vk::CommandBufferBeginInfo{
-      .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+  vk::UniqueCommandPool commandPool =
+    etna::unwrap_vk_result(ctx.getDevice().createCommandPoolUnique(vk::CommandPoolCreateInfo{
+      .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+      .queueFamilyIndex = ctx.getQueueFamilyIdx(),
     }));
 
-    fillCubemap(commandBuffer.get());
-    bakeDiffuseCubemap(commandBuffer.get());
-    bakeDiffuseSphericalHarmonics(commandBuffer.get());
+  vk::UniqueCommandBuffer commandBuffer = std::move(etna::unwrap_vk_result(
+    ctx.getDevice().allocateCommandBuffersUnique(vk::CommandBufferAllocateInfo{
+      .commandPool = commandPool.get(),
+      .level = vk::CommandBufferLevel::ePrimary,
+      .commandBufferCount = 1,
+    }))[0]);
 
-    ETNA_CHECK_VK_RESULT(commandBuffer->end());
+  vk::UniqueFence fence =
+    etna::unwrap_vk_result(ctx.getDevice().createFenceUnique(vk::FenceCreateInfo{}));
 
-    vk::CommandBufferSubmitInfo commandBufferSubmitInfo = {
-      .commandBuffer = commandBuffer.get(),
-      .deviceMask = 1,
-    };
+  ETNA_CHECK_VK_RESULT(commandBuffer->begin(vk::CommandBufferBeginInfo{
+    .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
+  }));
 
-    vk::SubmitInfo2 submitInfo = {
-      .commandBufferInfoCount = 1,
-      .pCommandBufferInfos = &commandBufferSubmitInfo,
-    };
+  fillCubemap(commandBuffer.get());
+  fillSphereSamples(commandBuffer.get());
+  // bakeDiffuseCubemap(commandBuffer.get());
+  bakeDiffuseSphericalHarmonics(commandBuffer.get());
 
-    ETNA_CHECK_VK_RESULT(ctx.getQueue().submit2({submitInfo}, fence.get()));
-    ETNA_CHECK_VK_RESULT(ctx.getDevice().waitForFences(
-      {fence.get()}, vk::True, std::numeric_limits<std::uint64_t>::max()));
+  ETNA_CHECK_VK_RESULT(commandBuffer->end());
+
+  vk::CommandBufferSubmitInfo commandBufferSubmitInfo = {
+    .commandBuffer = commandBuffer.get(),
+    .deviceMask = 1,
+  };
+
+  vk::SubmitInfo2 submitInfo = {
+    .commandBufferInfoCount = 1,
+    .pCommandBufferInfos = &commandBufferSubmitInfo,
+  };
+
+  ETNA_CHECK_VK_RESULT(ctx.getQueue().submit2({submitInfo}, fence.get()));
+  ETNA_CHECK_VK_RESULT(ctx.getDevice().waitForFences(
+    {fence.get()}, vk::True, std::numeric_limits<std::uint64_t>::max()));
+}
+
+void DiffuseBakingDemoRenderer::ResourcesPrepareContext::fillCubemap(
+  vk::CommandBuffer command_buffer)
+{
+  static const std::array<const char*, 6> CUBEMAP_TEXTURE_NAMES = {
+    "right",
+    "left",
+    "top",
+    "bottom",
+    "front",
+    "back",
+  };
+
+  std::array<HDRImagePixels, 6> faces;
+  for (std::size_t i = 0; i < 6; ++i)
+  {
+    faces[i] = loadImageHDR(fmt::format(
+      GRAPHICS_COURSE_RESOURCES_ROOT "/cubemaps/circus/{}.png", CUBEMAP_TEXTURE_NAMES[i]));
   }
 
-private:
-  // Default sampler
-
-  etna::Sampler defaultSampler;
-
-  // Cubemap
-
-  const etna::Image& cubemap;
-
-  // Cubemap filling resources
-
-  etna::Buffer cubemapStagingBuffer;
-
-  // Diffuse cubemap
-
-  const etna::Image& diffuseCubemap;
-
-  // Diffuse spherical harmonics
-
-  const etna::Buffer& diffuseSphericalHarmonics;
-
-  // Diffuse cubemap filling resources
-
-  etna::ComputePipeline diffuseCubemapBakePipeline;
-
-  // Diffuse spherical harmonics filling resources
-
-  etna::ComputePipeline diffuseSphericalHarmonicsBakePipeline;
-
-  etna::Buffer diffuseSphericalHarmonicSamplesStagingBuffer;
-  etna::Buffer diffuseSphericalHarmonicSamples;
-
-  void fillCubemap(vk::CommandBuffer command_buffer)
+  for (std::size_t i = 1; i < 6; ++i)
   {
-    static const std::array<const char*, 6> CUBEMAP_TEXTURE_NAMES = {
-      "right",
-      "left",
-      "top",
-      "bottom",
-      "front",
-      "back",
-    };
+    ETNA_VERIFYF(faces[i].width == faces[i].height, "Cubemap faces must be square");
+    ETNA_VERIFYF(faces[i].width == faces[0].width, "Cubemap faces must have equal size");
+  }
 
-    std::array<HDRImagePixels, 6> faces;
-    for (std::size_t i = 0; i < 6; ++i)
+  std::uint32_t faceSize = faces[0].width;
+
+  auto& ctx = etna::get_context();
+
+  cubemapStagingBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
+    .size = faceSize * faceSize * sizeof(glm::vec4) * 6,
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferSrc,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .name = "cubemap_staging_buffer",
+  });
+
+  std::byte* stagingBufferData = cubemapStagingBuffer.map();
+
+  for (std::size_t i = 0; i < 6; ++i)
+  {
+    std::memcpy(
+      stagingBufferData + faceSize * faceSize * sizeof(glm::vec4) * i,
+      faces[i].data.data(),
+      faceSize * faceSize * sizeof(glm::vec4));
+  }
+
+  etna::set_state(
+    command_buffer,
+    cubemap.get(),
+    vk::PipelineStageFlagBits2::eTransfer,
+    vk::AccessFlagBits2::eTransferWrite,
+    vk::ImageLayout::eTransferDstOptimal,
+    vk::ImageSubresourceRange{
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .baseMipLevel = 0,
+      .levelCount = 1,
+      .baseArrayLayer = 0,
+      .layerCount = 6,
+    });
+  etna::flush_barriers(command_buffer);
+
+  command_buffer.copyBufferToImage(
+    cubemapStagingBuffer.get(),
+    cubemap.get(),
+    vk::ImageLayout::eTransferDstOptimal,
     {
-      faces[i] = loadImageHDR(fmt::format(
-        GRAPHICS_COURSE_RESOURCES_ROOT "/cubemaps/debugdebug/{}.png", CUBEMAP_TEXTURE_NAMES[i]));
-    }
+      vk::BufferImageCopy{
+        .bufferOffset = 0,
+        .bufferRowLength = faceSize,
+        .bufferImageHeight = faceSize,
+        .imageSubresource =
+          {
+            .aspectMask = vk::ImageAspectFlagBits::eColor,
+            .mipLevel = 0,
+            .baseArrayLayer = 0,
+            .layerCount = 6,
+          },
+        .imageOffset = {0, 0, 0},
+        .imageExtent = {faceSize, faceSize, 1},
+      },
+    });
+}
 
-    for (std::size_t i = 1; i < 6; ++i)
+void DiffuseBakingDemoRenderer::ResourcesPrepareContext::fillSphereSamples(
+  vk::CommandBuffer command_buffer)
+{
+  namespace samples = generated::sphere_samples;
+
+  sphereSamplesStagingBuffer = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+    .size = std::span(samples::SAMPLE_DIRECTIONS).size_bytes(),
+    .bufferUsage = vk::BufferUsageFlagBits::eTransferSrc,
+    .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+    .name = "sphere_samples_staging_buffer",
+  });
+
+  std::byte* data = sphereSamplesStagingBuffer.map();
+
+  std::memcpy(
+    data, samples::SAMPLE_DIRECTIONS.data(), std::span(samples::SAMPLE_DIRECTIONS).size_bytes());
+
+  command_buffer.copyBuffer(
+    sphereSamplesStagingBuffer.get(),
+    sphereSamples.get(),
     {
-      ETNA_VERIFYF(faces[i].width == faces[i].height, "Cubemap faces must be square");
-      ETNA_VERIFYF(faces[i].width == faces[0].width, "Cubemap faces must have equal size");
-    }
+      vk::BufferCopy{
+        .srcOffset = 0,
+        .dstOffset = 0,
+        .size = std::span(samples::SAMPLE_DIRECTIONS).size_bytes(),
+      },
+    });
+}
 
-    std::uint32_t faceSize = faces[0].width;
-
-    auto& ctx = etna::get_context();
-
-    cubemapStagingBuffer = ctx.createBuffer(etna::Buffer::CreateInfo{
-      .size = faceSize * faceSize * sizeof(glm::vec4) * 6,
-      .bufferUsage = vk::BufferUsageFlagBits::eTransferSrc,
-      .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-      .name = "cubemap_staging_buffer",
+void DiffuseBakingDemoRenderer::ResourcesPrepareContext::bakeDiffuseSphericalHarmonics(
+  vk::CommandBuffer command_buffer)
+{
+  etna::create_program(
+    "diffuse_spherical_harmonics_bake",
+    {
+      DIFFUSE_BAKING_SHADERS_ROOT "shaders/baking/diffuse_spherical_harmonics.comp.spv",
     });
 
-    std::byte* stagingBufferData = cubemapStagingBuffer.map();
+  auto& pipelineManager = etna::get_context().getPipelineManager();
 
-    for (std::size_t i = 0; i < 6; ++i)
-    {
-      std::memcpy(
-        stagingBufferData + faceSize * faceSize * sizeof(glm::vec4) * i,
-        faces[i].data.data(),
-        faceSize * faceSize * sizeof(glm::vec4));
-    }
+  diffuseSphericalHarmonicsBakePipeline = pipelineManager.createComputePipeline(
+    "diffuse_spherical_harmonics_bake", etna::ComputePipeline::CreateInfo{});
 
-    etna::set_state(
-      command_buffer,
-      cubemap.get(),
-      vk::PipelineStageFlagBits2::eTransfer,
-      vk::AccessFlagBits2::eTransferWrite,
-      vk::ImageLayout::eTransferDstOptimal,
-      vk::ImageSubresourceRange{
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .baseMipLevel = 0,
-        .levelCount = 1,
-        .baseArrayLayer = 0,
-        .layerCount = 6,
-      });
-    etna::flush_barriers(command_buffer);
-
-    command_buffer.copyBufferToImage(
-      cubemapStagingBuffer.get(),
-      cubemap.get(),
-      vk::ImageLayout::eTransferDstOptimal,
-      {
-        vk::BufferImageCopy{
-          .bufferOffset = 0,
-          .bufferRowLength = faceSize,
-          .bufferImageHeight = faceSize,
-          .imageSubresource =
-            {
-              .aspectMask = vk::ImageAspectFlagBits::eColor,
-              .mipLevel = 0,
-              .baseArrayLayer = 0,
-              .layerCount = 6,
-            },
-          .imageOffset = {0, 0, 0},
-          .imageExtent = {faceSize, faceSize, 1},
-        },
-      });
-  }
-
-  void bakeDiffuseCubemap(vk::CommandBuffer command_buffer)
   {
-    etna::create_program(
-      "diffuse_cubemap_bake",
-      {
-        DIFFUSE_BAKING_SHADERS_ROOT "shaders/baking/diffuse_cubemap.comp.spv",
-      });
+    namespace shs = generated::spherical_harmonic_samples;
 
-    auto& pipelineManager = etna::get_context().getPipelineManager();
+    std::size_t sampleDirectionsSize = std::span(shs::SAMPLE_DIRECTIONS).size_bytes();
+    std::size_t precomputedValuesSize = std::span(shs::PRECOMPUTED_VALUES).size_bytes();
+    precomputedValuesSize += (4 - precomputedValuesSize % 4) % 4;
 
-    diffuseCubemapBakePipeline = pipelineManager.createComputePipeline(
-      "diffuse_cubemap_bake", etna::ComputePipeline::CreateInfo{});
+    std::size_t bufferSize = sampleDirectionsSize + precomputedValuesSize;
 
-    etna::set_state(
-      command_buffer,
-      cubemap.get(),
-      vk::PipelineStageFlagBits2::eComputeShader,
-      vk::AccessFlagBits2::eShaderRead,
-      vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::ImageSubresourceRange{
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .baseMipLevel = 0,
-        .levelCount = 1,
-        .baseArrayLayer = 0,
-        .layerCount = 6,
-      });
-    etna::set_state(
-      command_buffer,
-      diffuseCubemap.get(),
-      vk::PipelineStageFlagBits2::eComputeShader,
-      vk::AccessFlagBits2::eShaderWrite,
-      vk::ImageLayout::eGeneral,
-      vk::ImageSubresourceRange{
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .baseMipLevel = 0,
-        .levelCount = 1,
-        .baseArrayLayer = 0,
-        .layerCount = 6,
-      });
-    etna::flush_barriers(command_buffer);
-
-    auto diffuseCubemapBakeInfo = etna::get_shader_program("diffuse_cubemap_bake");
-
-    auto set = etna::create_descriptor_set(
-      diffuseCubemapBakeInfo.getDescriptorLayoutId(0),
-      command_buffer,
-      {
-        etna::Binding{
-          0,
-          cubemap.genBinding(
-            defaultSampler.get(),
-            vk::ImageLayout::eShaderReadOnlyOptimal,
-            etna::Image::ViewParams{
-              .viewType = vk::ImageViewType::eCube,
-              .layerCount = 6,
-            }),
-        },
-        etna::Binding{
-          1,
-          diffuseCubemap.genBinding(
-            defaultSampler.get(),
-            vk::ImageLayout::eGeneral,
-            etna::Image::ViewParams{
-              .viewType = vk::ImageViewType::e2DArray,
-              .layerCount = 6,
-            }),
-        },
-      });
-    etna::flush_barriers(command_buffer);
-
-    command_buffer.bindPipeline(
-      vk::PipelineBindPoint::eCompute, diffuseCubemapBakePipeline.getVkPipeline());
-
-    command_buffer.bindDescriptorSets(
-      vk::PipelineBindPoint::eCompute,
-      diffuseCubemapBakePipeline.getVkPipelineLayout(),
-      0,
-      {set.getVkSet()},
-      {});
-
-    command_buffer.dispatch(512, 512, 6);
-  }
-
-  void bakeDiffuseSphericalHarmonics(vk::CommandBuffer command_buffer)
-  {
-    etna::create_program(
-      "diffuse_spherical_harmonics_bake",
-      {
-        DIFFUSE_BAKING_SHADERS_ROOT "shaders/baking/diffuse_spherical_harmonics.comp.spv",
-      });
-
-    auto& pipelineManager = etna::get_context().getPipelineManager();
-
-    diffuseSphericalHarmonicsBakePipeline = pipelineManager.createComputePipeline(
-      "diffuse_spherical_harmonics_bake", etna::ComputePipeline::CreateInfo{});
-
-    {
-      namespace shs = generated::spherical_harmonic_samples;
-
-      std::size_t sampleDirectionsSize = std::span(shs::SAMPLE_DIRECTIONS).size_bytes();
-      std::size_t precomputedValuesSize = std::span(shs::PRECOMPUTED_VALUES).size_bytes();
-      precomputedValuesSize += (4 - precomputedValuesSize % 4) % 4;
-
-      std::size_t bufferSize = sampleDirectionsSize + precomputedValuesSize;
-
-      diffuseSphericalHarmonicSamplesStagingBuffer =
-        etna::get_context().createBuffer(etna::Buffer::CreateInfo{
-          .size = bufferSize,
-          .bufferUsage = vk::BufferUsageFlagBits::eTransferSrc,
-          .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-          .name = "diffuse_spherical_harmonic_samples_staging_buffer",
-        });
-      diffuseSphericalHarmonicSamples = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+    diffuseSphericalHarmonicSamplesStagingBuffer =
+      etna::get_context().createBuffer(etna::Buffer::CreateInfo{
         .size = bufferSize,
-        .bufferUsage =
-          vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
-        .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
-        .name = "diffuse_spherical_harmonic_samples",
+        .bufferUsage = vk::BufferUsageFlagBits::eTransferSrc,
+        .memoryUsage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+        .name = "diffuse_spherical_harmonic_samples_staging_buffer",
       });
+    diffuseSphericalHarmonicSamples = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+      .size = bufferSize,
+      .bufferUsage =
+        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eStorageBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
+      .name = "diffuse_spherical_harmonic_samples",
+    });
 
-      std::byte* data = diffuseSphericalHarmonicSamplesStagingBuffer.map();
+    std::byte* data = diffuseSphericalHarmonicSamplesStagingBuffer.map();
 
-      std::size_t offset = 0;
+    std::size_t offset = 0;
 
-      std::memcpy(
-        data + offset,
-        shs::SAMPLE_DIRECTIONS.data(),
-        std::span(shs::SAMPLE_DIRECTIONS).size_bytes());
-      offset += sampleDirectionsSize;
+    std::memcpy(
+      data + offset, shs::SAMPLE_DIRECTIONS.data(), std::span(shs::SAMPLE_DIRECTIONS).size_bytes());
+    offset += sampleDirectionsSize;
 
-      std::memcpy(
-        data + offset,
-        shs::PRECOMPUTED_VALUES.data(),
-        std::span(shs::PRECOMPUTED_VALUES).size_bytes());
-      offset += precomputedValuesSize;
+    std::memcpy(
+      data + offset,
+      shs::PRECOMPUTED_VALUES.data(),
+      std::span(shs::PRECOMPUTED_VALUES).size_bytes());
+    offset += precomputedValuesSize;
 
-      command_buffer.copyBuffer(
-        diffuseSphericalHarmonicSamplesStagingBuffer.get(),
-        diffuseSphericalHarmonicSamples.get(),
-        {
-          vk::BufferCopy{
-            .srcOffset = 0,
-            .dstOffset = 0,
-            .size = bufferSize,
-          },
-        });
-
-      std::array<vk::BufferMemoryBarrier2, 1> barriers = {
-        vk::BufferMemoryBarrier2{
-          .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
-          .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
-          .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
-          .dstAccessMask = vk::AccessFlagBits2::eShaderRead,
-          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-          .buffer = diffuseSphericalHarmonicSamples.get(),
-          .offset = 0,
+    command_buffer.copyBuffer(
+      diffuseSphericalHarmonicSamplesStagingBuffer.get(),
+      diffuseSphericalHarmonicSamples.get(),
+      {
+        vk::BufferCopy{
+          .srcOffset = 0,
+          .dstOffset = 0,
           .size = bufferSize,
         },
-      };
-
-      command_buffer.pipelineBarrier2(vk::DependencyInfo{
-        .dependencyFlags = vk::DependencyFlagBits::eByRegion,
-        .bufferMemoryBarrierCount = barriers.size(),
-        .pBufferMemoryBarriers = barriers.data(),
       });
-    }
 
-    etna::set_state(
-      command_buffer,
-      cubemap.get(),
-      vk::PipelineStageFlagBits2::eComputeShader,
-      vk::AccessFlagBits2::eShaderRead,
-      vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::ImageSubresourceRange{
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .baseMipLevel = 0,
-        .levelCount = 1,
-        .baseArrayLayer = 0,
-        .layerCount = 6,
-      });
-    etna::flush_barriers(command_buffer);
+    std::array<vk::BufferMemoryBarrier2, 1> barriers = {
+      vk::BufferMemoryBarrier2{
+        .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+        .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+        .dstAccessMask = vk::AccessFlagBits2::eShaderRead,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer = diffuseSphericalHarmonicSamples.get(),
+        .offset = 0,
+        .size = bufferSize,
+      },
+    };
 
-    auto diffuseSphericalHarmonicsBakeInfo =
-      etna::get_shader_program("diffuse_spherical_harmonics_bake");
-
-    auto set = etna::create_descriptor_set(
-      diffuseSphericalHarmonicsBakeInfo.getDescriptorLayoutId(0),
-      command_buffer,
-      {
-        etna::Binding{
-          0,
-          cubemap.genBinding(
-            defaultSampler.get(),
-            vk::ImageLayout::eShaderReadOnlyOptimal,
-            etna::Image::ViewParams{
-              .viewType = vk::ImageViewType::eCube,
-              .layerCount = 6,
-            }),
-        },
-        etna::Binding{
-          1,
-          diffuseSphericalHarmonicSamples.genBinding(),
-        },
-        etna::Binding{
-          2,
-          diffuseSphericalHarmonics.genBinding(),
-        },
-      });
-    etna::flush_barriers(command_buffer);
-
-    command_buffer.bindPipeline(
-      vk::PipelineBindPoint::eCompute, diffuseSphericalHarmonicsBakePipeline.getVkPipeline());
-
-    command_buffer.bindDescriptorSets(
-      vk::PipelineBindPoint::eCompute,
-      diffuseSphericalHarmonicsBakePipeline.getVkPipelineLayout(),
-      0,
-      {set.getVkSet()},
-      {});
-
-    command_buffer.dispatch(
-      (generated::spherical_harmonic_samples::MAX_BAND + 1) *
-        (generated::spherical_harmonic_samples::MAX_BAND + 1),
-      1,
-      1);
+    command_buffer.pipelineBarrier2(vk::DependencyInfo{
+      .dependencyFlags = vk::DependencyFlagBits::eByRegion,
+      .bufferMemoryBarrierCount = barriers.size(),
+      .pBufferMemoryBarriers = barriers.data(),
+    });
   }
-};
+
+  etna::set_state(
+    command_buffer,
+    cubemap.get(),
+    vk::PipelineStageFlagBits2::eComputeShader,
+    vk::AccessFlagBits2::eShaderRead,
+    vk::ImageLayout::eShaderReadOnlyOptimal,
+    vk::ImageSubresourceRange{
+      .aspectMask = vk::ImageAspectFlagBits::eColor,
+      .baseMipLevel = 0,
+      .levelCount = 1,
+      .baseArrayLayer = 0,
+      .layerCount = 6,
+    });
+  etna::flush_barriers(command_buffer);
+
+  auto diffuseSphericalHarmonicsBakeInfo =
+    etna::get_shader_program("diffuse_spherical_harmonics_bake");
+
+  auto set = etna::create_descriptor_set(
+    diffuseSphericalHarmonicsBakeInfo.getDescriptorLayoutId(0),
+    command_buffer,
+    {
+      etna::Binding{
+        0,
+        cubemap.genBinding(
+          defaultSampler.get(),
+          vk::ImageLayout::eShaderReadOnlyOptimal,
+          etna::Image::ViewParams{
+            .viewType = vk::ImageViewType::eCube,
+            .layerCount = 6,
+          }),
+      },
+      etna::Binding{
+        1,
+        diffuseSphericalHarmonicSamples.genBinding(),
+      },
+      etna::Binding{
+        2,
+        diffuseSphericalHarmonics.genBinding(),
+      },
+    });
+  etna::flush_barriers(command_buffer);
+
+  command_buffer.bindPipeline(
+    vk::PipelineBindPoint::eCompute, diffuseSphericalHarmonicsBakePipeline.getVkPipeline());
+
+  command_buffer.bindDescriptorSets(
+    vk::PipelineBindPoint::eCompute,
+    diffuseSphericalHarmonicsBakePipeline.getVkPipelineLayout(),
+    0,
+    {set.getVkSet()},
+    {});
+
+  command_buffer.dispatch(
+    (generated::spherical_harmonic_samples::MAX_BAND + 1) *
+      (generated::spherical_harmonic_samples::MAX_BAND + 1),
+    1,
+    1);
+}
 
 void DiffuseBakingDemoRenderer::debugInput(const Keyboard&) {}
 
@@ -659,39 +573,14 @@ void DiffuseBakingDemoRenderer::doSpherePass(vk::CommandBuffer command_buffer)
             .layerCount = 6,
           }),
       },
-    };
-    etna::set_state(
-      command_buffer,
-      cubemap.get(),
-      vk::PipelineStageFlagBits2::eFragmentShader,
-      vk::AccessFlagBits2::eShaderRead,
-      vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::ImageSubresourceRange{
-        .aspectMask = vk::ImageAspectFlagBits::eColor,
-        .baseMipLevel = 0,
-        .levelCount = 1,
-        .baseArrayLayer = 0,
-        .layerCount = 6,
-      });
-    break;
-  case DiffuseMode::CUBEMAP:
-    pipeline = &cubemapDiffusePipeline;
-    shaderInfo.emplace(etna::get_shader_program("cubemap_diffuse"));
-    bindings = std::vector<etna::Binding>{
       etna::Binding{
-        0,
-        diffuseCubemap.genBinding(
-          defaultSampler.get(),
-          vk::ImageLayout::eShaderReadOnlyOptimal,
-          etna::Image::ViewParams{
-            .viewType = vk::ImageViewType::eCube,
-            .layerCount = 6,
-          }),
+        1,
+        sphereSamples.genBinding(),
       },
     };
     etna::set_state(
       command_buffer,
-      diffuseCubemap.get(),
+      cubemap.get(),
       vk::PipelineStageFlagBits2::eFragmentShader,
       vk::AccessFlagBits2::eShaderRead,
       vk::ImageLayout::eShaderReadOnlyOptimal,
@@ -819,12 +708,10 @@ void DiffuseBakingDemoRenderer::renderWorld(
 {
   ETNA_PROFILE_GPU(command_buffer, renderWorld);
 
-  if (isFirstFrame)
+  if (!prepareContext.has_value())
   {
-    ResourcesPrepareContext prepareContext(cubemap, diffuseCubemap, diffuseSphericalHarmonics);
-    prepareContext.prepareResources();
-
-    isFirstFrame = false;
+    prepareContext.emplace(cubemap, sphereSamples, diffuseSphericalHarmonics);
+    prepareContext->prepareResources();
   }
 
   // Cubemap pass
@@ -873,10 +760,6 @@ void DiffuseBakingDemoRenderer::drawGui()
     DiffuseModeMetadata{
       .mode = DiffuseMode::DYNAMIC,
       .name = "Dynamic",
-    },
-    DiffuseModeMetadata{
-      .mode = DiffuseMode::CUBEMAP,
-      .name = "Cubemap",
     },
     DiffuseModeMetadata{
       .mode = DiffuseMode::SPHERICAL_HARMONICS,
@@ -953,59 +836,6 @@ void DiffuseBakingDemoRenderer::initDynamicDiffusePipeline()
     pipelineManager
       .createGraphicsPipeline(
         "dynamic_diffuse",
-        etna::GraphicsPipeline::CreateInfo{
-          .rasterizationConfig =
-            vk::PipelineRasterizationStateCreateInfo{
-              .polygonMode = vk::PolygonMode::eFill,
-              .cullMode = vk::CullModeFlagBits::eBack,
-              .frontFace = vk::FrontFace::eCounterClockwise,
-              .lineWidth = 1.0f,
-            },
-          .blendingConfig =
-            etna::GraphicsPipeline::CreateInfo::Blending{
-              .attachments =
-                {
-                  vk::PipelineColorBlendAttachmentState{
-                    .blendEnable = vk::True,
-                    .srcColorBlendFactor = vk::BlendFactor::eConstantColor,
-                    .dstColorBlendFactor = vk::BlendFactor::eOneMinusConstantColor,
-                    .colorBlendOp = vk::BlendOp::eAdd,
-                    .srcAlphaBlendFactor = vk::BlendFactor::eOne,
-                    .dstAlphaBlendFactor = vk::BlendFactor::eZero,
-                    .alphaBlendOp = vk::BlendOp::eAdd,
-                    .colorWriteMask = vk::ColorComponentFlagBits::eR |
-                      vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB |
-                      vk::ColorComponentFlagBits::eA,
-                  },
-                },
-              .logicOpEnable = false,
-              .logicOp = vk::LogicOp::eCopy,
-            },
-          .fragmentShaderOutput =
-            {
-              .colorAttachmentFormats =
-                {
-                  vk::Format::eR8G8B8A8Unorm,
-                },
-              .depthAttachmentFormat = vk::Format::eUndefined,
-            },
-          .dynamicStates =
-            {
-              vk::DynamicState::eViewport,
-              vk::DynamicState::eScissor,
-              vk::DynamicState::eBlendConstants,
-            },
-        });
-}
-
-void DiffuseBakingDemoRenderer::initCubemapDiffusePipeline()
-{
-  auto& pipelineManager = etna::get_context().getPipelineManager();
-
-  cubemapDiffusePipeline =
-    pipelineManager
-      .createGraphicsPipeline(
-        "cubemap_diffuse",
         etna::GraphicsPipeline::CreateInfo{
           .rasterizationConfig =
             vk::PipelineRasterizationStateCreateInfo{

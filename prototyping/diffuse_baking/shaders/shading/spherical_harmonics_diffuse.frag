@@ -31,14 +31,12 @@ vec3 evaluateSphericalHarmonic(vec3 normal)
 {
   vec3 result = vec3(0.0);
 
-  float cosTheta = normal.z;
+  float cosTheta = clamp(normal.z, -1.0, 1.0);
 
   float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
 
   float cosPhi = clamp(normal.x / sinTheta, -1.0, 1.0);
   float sinPhi = clamp(normal.y / sinTheta, -1.0, 1.0);
-
-  float phi = acos(cosPhi) * (sinPhi < 0.0 ? -1.0 : 1.0);
 
   uint alpCoefficientOffset = 0;
   uint shCoefficientOffset = 0;
@@ -47,8 +45,6 @@ vec3 evaluateSphericalHarmonic(vec3 normal)
   for (int band = 0; band <= sphericalHarmonicSamples_maxBand; ++band)
   {
     {
-      // float alpValue = sphericalHarmonicSamples_alpCoefficients[alpCoefficientOffset];
-
       float alpValue = 0.0;
 
       float currArg = 1.0;
@@ -65,6 +61,9 @@ vec3 evaluateSphericalHarmonic(vec3 normal)
       alpCoefficientOffset += band + 1;
     }
 
+    float cosAbsNumTimesPhi = cosPhi;
+    float sinAbsNumTimesPhi = sinPhi;
+
     for (int absNum = 1; absNum <= band; ++absNum)
     {
       float alpValue = 0.0;
@@ -79,12 +78,18 @@ vec3 evaluateSphericalHarmonic(vec3 normal)
       alpValue *= pow(sinTheta, absNum / 2.0);
 
       float shCoefficient =
-        sphericalHarmonicSamples_shCoefficients[shCoefficientOffset + absNum - 1];
+        sphericalHarmonicSamples_shCoefficients[shCoefficientOffset + absNum];
 
-      result += shCoefficient * cos(absNum * phi) * alpValue *
+      result += shCoefficient * cosAbsNumTimesPhi * alpValue *
           coefficients[coefficientOffset + band + absNum].rgb +
-        shCoefficient * sin(absNum * phi) * alpValue *
+        shCoefficient * sinAbsNumTimesPhi * alpValue *
           coefficients[coefficientOffset + band - absNum].rgb;
+
+      float newCosAbsNumTimesPhi = cosPhi * cosAbsNumTimesPhi - sinPhi * sinAbsNumTimesPhi;
+      float newSinAbsNumTimesPhi = sinPhi * cosAbsNumTimesPhi + cosPhi * sinAbsNumTimesPhi;
+
+      cosAbsNumTimesPhi = newCosAbsNumTimesPhi;
+      sinAbsNumTimesPhi = newSinAbsNumTimesPhi;
 
       alpCoefficientOffset += band - absNum + 1;
     }
