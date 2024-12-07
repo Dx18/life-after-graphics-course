@@ -34,7 +34,7 @@ void Renderer::initVulkan(std::span<const char*> instance_extensions)
     .deviceExtensions = deviceExtensions,
     .features = vk::PhysicalDeviceFeatures2{.features = {}},
     // Replace with an index if etna detects your preferred GPU incorrectly
-    .physicalDeviceIndexOverride = 1,
+    .physicalDeviceIndexOverride = {},
     // How much frames we buffer on the GPU without waiting for their completion on the CPU
     .numFramesInFlight = 2,
   });
