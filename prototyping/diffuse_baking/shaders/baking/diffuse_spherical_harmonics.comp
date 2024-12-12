@@ -6,25 +6,29 @@
 #include "generated/SphericalHarmonicSamples.inc"
 
 
-// Grid:
+// Global coordinates:
 //
-// X: for each harmonic coefficient
+// X: index of a direction for spherical harmonic
+// Y: index of a diffuse sample
 //
 // Work group:
 //
-// X: for each sample chunk
+// Z: index of a spherical harmonic coefficient
 
-const int CHUNK_COUNT = 64;
-const float PI = 3.14159265;
 
-layout(local_size_x = CHUNK_COUNT, local_size_y = 1, local_size_z = 1) in;
-
-layout(binding = 0, set = 0) uniform samplerCube cubemap;
+const uint LOCAL_SIZE = 8;
 
 const uint sphericalHarmonicSamples_precomputedValuesPerSampleCount =
   (sphericalHarmonicSamples_maxBand + 1) * (sphericalHarmonicSamples_maxBand + 1);
 const uint sphericalHarmonicSamples_precomputedValuesCount =
   sphericalHarmonicSamples_sampleCount * sphericalHarmonicSamples_precomputedValuesPerSampleCount;
+
+layout(
+  local_size_x = LOCAL_SIZE,
+  local_size_y = LOCAL_SIZE,
+  local_size_z = sphericalHarmonicSamples_precomputedValuesPerSampleCount) in;
+
+layout(binding = 0, set = 0) uniform samplerCube cubemap;
 
 layout(binding = 1, set = 0, std140) readonly buffer samples_t
 {
@@ -33,10 +37,21 @@ layout(binding = 1, set = 0, std140) readonly buffer samples_t
 }
 samples;
 
-layout(binding = 2, set = 0, std430) writeonly buffer coefficients_t
+layout(binding = 2, set = 0, std430) buffer coefficients_t
 {
-  vec4 coefficients[sphericalHarmonicSamples_precomputedValuesCount];
+  uvec4 coefficients[sphericalHarmonicSamples_precomputedValuesCount];
 };
+
+const mat3 layerToTransform[] = mat3[](
+  mat3(vec3(0.0, 0.0, -1.0), vec3(0.0, 1.0, 0.0), vec3(1.0, 0.0, 0.0)),
+  mat3(vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 0.0), vec3(-1.0, 0.0, 0.0)),
+  mat3(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, -1.0), vec3(0.0, 1.0, 0.0)),
+  mat3(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), vec3(0.0, -1.0, 0.0)),
+  mat3(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0)),
+  mat3(vec3(-1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, -1.0)));
+
+shared vec3 currCoefficients[LOCAL_SIZE][LOCAL_SIZE]
+                            [sphericalHarmonicSamples_precomputedValuesPerSampleCount];
 
 struct SphericalHarmonicSample
 {
@@ -54,54 +69,86 @@ SphericalHarmonicSample getSphericalHarmonicSample(uint index, uint coefficientI
     samples.precomputedValues[precomputedValueIndex / 4][precomputedValueIndex % 4]);
 }
 
-shared vec3 currCoefficients[CHUNK_COUNT];
+#define SAMPLE_COUNT sphericalHarmonicSamples_sampleCount
+#define SAMPLE_DIRECTIONS_ARRAY samples.directions
+#include "../impl/EnvironmentDiffuse.inc"
 
 void main()
 {
-  uint chunkIndex = gl_LocalInvocationID.x;
-  uint coefficientIndex = gl_WorkGroupID.x;
+  uint sphericalHarmonicDirIndex = gl_GlobalInvocationID.x;
+  uint localSphericalHarmonicDirIndex = gl_LocalInvocationID.x;
 
-  uint chunkSize = sphericalHarmonicSamples_sampleCount / CHUNK_COUNT;
-  uint bigChunkCount = sphericalHarmonicSamples_sampleCount % CHUNK_COUNT;
+  uint diffuseSampleIndex = gl_GlobalInvocationID.y;
+  uint localDiffuseSampleIndex = gl_LocalInvocationID.y;
 
-  uint chunkBegin;
-  uint chunkEnd;
-  if (chunkIndex < bigChunkCount)
+  uint coefficientIndex = gl_LocalInvocationID.z;
+
+  if (sphericalHarmonicDirIndex >= sphericalHarmonicSamples_sampleCount)
   {
-    chunkBegin = chunkIndex * (chunkSize + 1);
-    chunkEnd = (chunkIndex + 1) * (chunkSize + 1);
-  }
-  else
-  {
-    chunkBegin = bigChunkCount + chunkIndex * chunkSize;
-    chunkEnd = bigChunkCount + (chunkIndex + 1) * chunkSize;
+    currCoefficients[localDiffuseSampleIndex][localSphericalHarmonicDirIndex][coefficientIndex] =
+      vec3(0.0);
+    barrier();
+    barrier();
+    return;
   }
 
-  vec3 currCoefficient = vec3(0.0);
+  SphericalHarmonicSample currSample =
+    getSphericalHarmonicSample(sphericalHarmonicDirIndex, coefficientIndex);
 
-  for (uint i = chunkBegin; i < chunkEnd; ++i)
-  {
-    SphericalHarmonicSample currSample = getSphericalHarmonicSample(i, coefficientIndex);
+  uint seed = sphericalHarmonicDirIndex * 1000381 + randomUint(sphericalHarmonicDirIndex) * 71 +
+    diffuseSampleIndex * 1237 + randomUint(diffuseSampleIndex);
 
-    vec3 color = texture(cubemap, currSample.direction).rgb;
+  vec3 contribution =
+    calculateEnvironmentDiffuse(normalize(currSample.direction), 64, seed, cubemap) *
+    currSample.value * 4.0 * PI / sphericalHarmonicSamples_sampleCount / gl_NumWorkGroups.y /
+    LOCAL_SIZE;
 
-    currCoefficient += color * currSample.value;
-  }
-
-  currCoefficients[chunkIndex] = currCoefficient;
+  currCoefficients[localDiffuseSampleIndex][localSphericalHarmonicDirIndex][coefficientIndex] =
+    contribution;
 
   barrier();
 
-  if (chunkIndex == 0)
+  if (localSphericalHarmonicDirIndex == 0)
   {
-    vec3 coefficient = vec3(0.0);
+    vec3 coefficientSum = vec3(0.0);
 
-    for (uint i = 0; i < CHUNK_COUNT; ++i)
+    for (int j = 0; j < LOCAL_SIZE; ++j)
     {
-      coefficient += currCoefficients[i];
+      coefficientSum += currCoefficients[localDiffuseSampleIndex][j][coefficientIndex];
     }
 
-    coefficients[coefficientIndex] =
-      vec4(coefficient * 2.0 * PI / sphericalHarmonicSamples_sampleCount, 1.0);
+    currCoefficients[localDiffuseSampleIndex][0][coefficientIndex].xyz = coefficientSum;
+  }
+
+  barrier();
+
+  if (localSphericalHarmonicDirIndex == 0 && localDiffuseSampleIndex == 0)
+  {
+    vec3 coefficientSum = vec3(0.0);
+
+    for (int i = 0; i < LOCAL_SIZE; ++i)
+    {
+      coefficientSum += currCoefficients[i][0][coefficientIndex];
+    }
+
+    for (int channel = 0; channel < 3; ++channel)
+    {
+      uint valueExpected = 0;
+
+      while (true)
+      {
+        uint valueSeen = atomicCompSwap(
+          coefficients[coefficientIndex][channel],
+          valueExpected,
+          floatBitsToUint(uintBitsToFloat(valueExpected) + coefficientSum[channel]));
+
+        if (valueSeen == valueExpected)
+        {
+          break;
+        }
+
+        valueExpected = valueSeen;
+      }
+    }
   }
 }

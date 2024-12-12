@@ -53,7 +53,7 @@ add_custom_target(sphere_samples_inc
 
 add_custom_target(spherical_harmonic_samples_inc
   python3 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gen_spherical_harmonic_samples.py
-  36 2
+  48 2
   ${GENERATED_GLSL_DIRECTORY}/SphericalHarmonicSamples.inc
   ${GENERATED_CPP_DIRECTORY}/SphericalHarmonicSamples.hpp
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gen_spherical_harmonic_samples.py

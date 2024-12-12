@@ -94,7 +94,7 @@ void DiffuseBakingDemoRenderer::allocateResources(glm::uvec2 swapchain_resolutio
   diffuseSphericalHarmonics = ctx.createBuffer(etna::Buffer::CreateInfo{
     .size = (generated::spherical_harmonic_samples::MAX_BAND + 1) *
       (generated::spherical_harmonic_samples::MAX_BAND + 1) * sizeof(glm::vec4),
-    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer,
+    .bufferUsage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
     .memoryUsage = VMA_MEMORY_USAGE_GPU_ONLY,
     .name = "diffuse_spherical_harmonics",
   });
@@ -386,7 +386,14 @@ void DiffuseBakingDemoRenderer::ResourcesPrepareContext::bakeDiffuseSphericalHar
         },
       });
 
-    std::array<vk::BufferMemoryBarrier2, 1> barriers = {
+    command_buffer.fillBuffer(
+      diffuseSphericalHarmonics.get(),
+      0,
+      (generated::spherical_harmonic_samples::MAX_BAND + 1) *
+        (generated::spherical_harmonic_samples::MAX_BAND + 1) * sizeof(glm::vec4),
+      0);
+
+    std::array<vk::BufferMemoryBarrier2, 2> barriers = {
       vk::BufferMemoryBarrier2{
         .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
         .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
@@ -397,6 +404,18 @@ void DiffuseBakingDemoRenderer::ResourcesPrepareContext::bakeDiffuseSphericalHar
         .buffer = diffuseSphericalHarmonicSamples.get(),
         .offset = 0,
         .size = bufferSize,
+      },
+      vk::BufferMemoryBarrier2{
+        .srcStageMask = vk::PipelineStageFlagBits2::eTransfer,
+        .srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
+        .dstStageMask = vk::PipelineStageFlagBits2::eComputeShader,
+        .dstAccessMask = vk::AccessFlagBits2::eShaderWrite | vk::AccessFlagBits2::eShaderRead,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .buffer = diffuseSphericalHarmonics.get(),
+        .offset = 0,
+        .size = (generated::spherical_harmonic_samples::MAX_BAND + 1) *
+          (generated::spherical_harmonic_samples::MAX_BAND + 1) * sizeof(glm::vec4),
       },
     };
 
@@ -460,11 +479,7 @@ void DiffuseBakingDemoRenderer::ResourcesPrepareContext::bakeDiffuseSphericalHar
     {set.getVkSet()},
     {});
 
-  command_buffer.dispatch(
-    (generated::spherical_harmonic_samples::MAX_BAND + 1) *
-      (generated::spherical_harmonic_samples::MAX_BAND + 1),
-    1,
-    1);
+  command_buffer.dispatch((generated::spherical_harmonic_samples::SAMPLE_COUNT - 1) / 8 + 1, 1, 1);
 }
 
 void DiffuseBakingDemoRenderer::debugInput(const Keyboard&) {}
